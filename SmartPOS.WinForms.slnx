@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/Database/" />
+  <Folder Name="/Database/Docs/" />
+  <Folder Name="/Database/Scripts/">
+    <File Path="01_CreateDatabase.sql" />
+    <File Path="02_CreateTables.sql" />
+    <File Path="03_CreateIndexes.sql" />
+    <File Path="03_InsertSeedData.sql" />
+    <File Path="04_StoredProcedures.sql" />
+    <File Path="05_Views.sql" />
+    <File Path="06_TestData.sql" />
+  </Folder>
+  <Project Path="SmartPOS.WinForms.BLL/SmartPOS.WinForms.BLL.csproj" Id="226d319d-d853-483b-ba8e-ba32acbd49c6" />
+  <Project Path="SmartPOS.WinForms.Common/SmartPOS.WinForms.Common.csproj" Id="5c8fd337-55e5-4179-adfc-8dbbf5092892" />
+  <Project Path="SmartPOS.WinForms.DAL/SmartPOS.WinForms.DAL.csproj" Id="5b2c4fc8-5358-4586-937e-766d9c87fcf5" />
+  <Project Path="SmartPOS.WinForms.DTO/SmartPOS.WinForms.DTO.csproj" Id="a632b627-9278-4b9d-8930-b381e2ec7fc3" />
+  <Project Path="SmartPOS.WinForms.UI/SmartPOS.WinForms.UI.csproj" Id="604622fe-52a9-4ca0-a1f2-5d9373e2e976" />
+</Solution>
