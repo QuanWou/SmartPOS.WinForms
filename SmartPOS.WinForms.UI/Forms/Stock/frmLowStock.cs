@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Forms.Main;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
 {
@@ -226,7 +227,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         private void LoadProducts()
         {
             _products = _productService.GetAll()
-                .Where(x => x.TrangThai)
+                .Where(x => x.TrangThai && (!x.HanSuDung.HasValue || x.HanSuDung.Value.Date >= DateTime.Today))
                 .ToList();
         }
 
@@ -259,7 +260,17 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 return;
             }
 
-            MessageBox.Show("Bạn có thể chuyển sang màn hình Nhập kho để bổ sung sản phẩm này.", "Thông báo");
+            frmMain mainForm = TopLevelControl as frmMain
+                ?? Parent?.FindForm() as frmMain
+                ?? Application.OpenForms.OfType<frmMain>().FirstOrDefault();
+
+            if (mainForm != null)
+            {
+                mainForm.NavigateToPage(new frmStockIn());
+                return;
+            }
+
+            MessageBox.Show("Mở màn hình Nhập kho để bổ sung sản phẩm này.", "Thông báo");
         }
 
         private void SearchLowStock()

@@ -27,7 +27,6 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         private UcTopBar topBar;
         private Panel pnlContent;     // holds the active page
         private Panel pnlRight;       // topBar + pnlContent (right column)
-        private Panel pnlSidebarWrap; // fixed-width left column
 
         // Track current page to avoid redundant reloads
         private Form _currentPage;
@@ -98,7 +97,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
 
             topBar.BtnPOSClicked += (s, e) =>
             {
-                NavigatePlaceholder("Bán hàng");
+                LoadPage(new frmPOS());
             };
 
             topBar.BtnAddNewClicked += (s, e) =>
@@ -111,6 +110,19 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                         if (frm.IsSavedSuccessfully)
                         {
                             LoadPage(new frmProducts());
+                        }
+                    }
+                    return;
+                }
+
+                if (_currentPage is frmExpiredProducts)
+                {
+                    using (var frm = new frmProductEdit())
+                    {
+                        frm.ShowDialog(this);
+                        if (frm.IsSavedSuccessfully)
+                        {
+                            LoadPage(new frmExpiredProducts());
                         }
                     }
                     return;
@@ -215,6 +227,12 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return;
             }
 
+            if (page is frmExpiredProducts)
+            {
+                topBar.TitleText = "Ngừng bán / hết hạn";
+                return;
+            }
+
             if (page is frmCategories)
             {
                 topBar.TitleText = "Danh mục";
@@ -271,6 +289,11 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             UpdateTopBarTitle(page);
         }
 
+        public void NavigateToPage(Form page)
+        {
+            LoadPage(page);
+        }
+
         // Force the current page to re-measure itself (e.g. after sidebar toggle)
         private void RefreshCurrentPage()
         {
@@ -308,7 +331,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                     break;
 
                 case "ExpiredProducts":
-                    NavigatePlaceholder("Sản phẩm ngừng bán / hết hạn");
+                    LoadPage(new frmExpiredProducts());
                     break;
 
                 case "LowStocks":
@@ -349,18 +372,6 @@ namespace SmartPOS.WinForms.UI.Forms.Main
 
                 case "Users":
                     LoadPage(new frmUsers());
-                    break;
-
-                case "SuperAdmin":
-                    NavigatePlaceholder("Quản trị hệ thống");
-                    break;
-
-                case "Applications":
-                    NavigatePlaceholder("Ứng dụng");
-                    break;
-
-                case "Layouts":
-                    NavigatePlaceholder("Giao diện");
                     break;
 
                 default:

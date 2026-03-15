@@ -20,21 +20,39 @@ namespace SmartPOS.WinForms.DAL.Repositories
         {
             string sql = @"
                 SELECT 
-                    MaSP,
-                    TenSP,
-                    MaVach,
-                    DonViTinh,
-                    GiaNhap,
-                    GiaBan,
-                    SoLuongTon,
-                    MaLoai,
-                    HinhAnh,
-                    MoTa,
-                    TrangThai,
-                    NgayTao,
-                    NgayCapNhat
-                FROM Products
-                ORDER BY MaSP DESC";
+                    p.MaSP,
+                    p.TenSP,
+                    p.MaVach,
+                    p.DonViTinh,
+                    p.GiaNhap,
+                    p.GiaBan,
+                    COALESCE(lot.SellableQty, p.SoLuongTon) AS SoLuongTon,
+                    p.MaLoai,
+                    p.HinhAnh,
+                    p.MoTa,
+                    COALESCE(lot.NextExpiry, p.HanSuDung) AS HanSuDung,
+                    p.TrangThai,
+                    p.NgayTao,
+                    p.NgayCapNhat
+                FROM Products p
+                OUTER APPLY
+                (
+                    SELECT
+                        SUM(CASE
+                            WHEN pl.HanSuDung IS NULL OR pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.SoLuongTonLo
+                            ELSE 0
+                        END) AS SellableQty,
+                        MIN(CASE
+                            WHEN pl.SoLuongTonLo > 0
+                                 AND pl.HanSuDung IS NOT NULL
+                                 AND pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.HanSuDung
+                        END) AS NextExpiry
+                    FROM ProductLots pl
+                    WHERE pl.MaSP = p.MaSP
+                ) lot
+                ORDER BY p.MaSP DESC";
 
             return _dbHelper.Query<ProductDTO>(sql);
         }
@@ -43,21 +61,39 @@ namespace SmartPOS.WinForms.DAL.Repositories
         {
             string sql = @"
                 SELECT 
-                    MaSP,
-                    TenSP,
-                    MaVach,
-                    DonViTinh,
-                    GiaNhap,
-                    GiaBan,
-                    SoLuongTon,
-                    MaLoai,
-                    HinhAnh,
-                    MoTa,
-                    TrangThai,
-                    NgayTao,
-                    NgayCapNhat
-                FROM Products
-                WHERE MaSP = @MaSP";
+                    p.MaSP,
+                    p.TenSP,
+                    p.MaVach,
+                    p.DonViTinh,
+                    p.GiaNhap,
+                    p.GiaBan,
+                    COALESCE(lot.SellableQty, p.SoLuongTon) AS SoLuongTon,
+                    p.MaLoai,
+                    p.HinhAnh,
+                    p.MoTa,
+                    COALESCE(lot.NextExpiry, p.HanSuDung) AS HanSuDung,
+                    p.TrangThai,
+                    p.NgayTao,
+                    p.NgayCapNhat
+                FROM Products p
+                OUTER APPLY
+                (
+                    SELECT
+                        SUM(CASE
+                            WHEN pl.HanSuDung IS NULL OR pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.SoLuongTonLo
+                            ELSE 0
+                        END) AS SellableQty,
+                        MIN(CASE
+                            WHEN pl.SoLuongTonLo > 0
+                                 AND pl.HanSuDung IS NOT NULL
+                                 AND pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.HanSuDung
+                        END) AS NextExpiry
+                    FROM ProductLots pl
+                    WHERE pl.MaSP = p.MaSP
+                ) lot
+                WHERE p.MaSP = @MaSP";
 
             return _dbHelper.QueryFirstOrDefault<ProductDTO>(sql, new { MaSP = maSP });
         }
@@ -66,22 +102,40 @@ namespace SmartPOS.WinForms.DAL.Repositories
         {
             string sql = @"
                 SELECT 
-                    MaSP,
-                    TenSP,
-                    MaVach,
-                    DonViTinh,
-                    GiaNhap,
-                    GiaBan,
-                    SoLuongTon,
-                    MaLoai,
-                    HinhAnh,
-                    MoTa,
-                    TrangThai,
-                    NgayTao,
-                    NgayCapNhat
-                FROM Products
-                WHERE MaVach = @MaVach
-                  AND TrangThai = 1";
+                    p.MaSP,
+                    p.TenSP,
+                    p.MaVach,
+                    p.DonViTinh,
+                    p.GiaNhap,
+                    p.GiaBan,
+                    COALESCE(lot.SellableQty, p.SoLuongTon) AS SoLuongTon,
+                    p.MaLoai,
+                    p.HinhAnh,
+                    p.MoTa,
+                    COALESCE(lot.NextExpiry, p.HanSuDung) AS HanSuDung,
+                    p.TrangThai,
+                    p.NgayTao,
+                    p.NgayCapNhat
+                FROM Products p
+                OUTER APPLY
+                (
+                    SELECT
+                        SUM(CASE
+                            WHEN pl.HanSuDung IS NULL OR pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.SoLuongTonLo
+                            ELSE 0
+                        END) AS SellableQty,
+                        MIN(CASE
+                            WHEN pl.SoLuongTonLo > 0
+                                 AND pl.HanSuDung IS NOT NULL
+                                 AND pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.HanSuDung
+                        END) AS NextExpiry
+                    FROM ProductLots pl
+                    WHERE pl.MaSP = p.MaSP
+                ) lot
+                WHERE p.MaVach = @MaVach
+                  AND p.TrangThai = 1";
 
             return _dbHelper.QueryFirstOrDefault<ProductDTO>(sql, new { MaVach = maVach });
         }
@@ -90,45 +144,63 @@ namespace SmartPOS.WinForms.DAL.Repositories
         {
             StringBuilder sqlBuilder = new StringBuilder(@"
                 SELECT 
-                    MaSP,
-                    TenSP,
-                    MaVach,
-                    DonViTinh,
-                    GiaNhap,
-                    GiaBan,
-                    SoLuongTon,
-                    MaLoai,
-                    HinhAnh,
-                    MoTa,
-                    TrangThai,
-                    NgayTao,
-                    NgayCapNhat
-                FROM Products
+                    p.MaSP,
+                    p.TenSP,
+                    p.MaVach,
+                    p.DonViTinh,
+                    p.GiaNhap,
+                    p.GiaBan,
+                    COALESCE(lot.SellableQty, p.SoLuongTon) AS SoLuongTon,
+                    p.MaLoai,
+                    p.HinhAnh,
+                    p.MoTa,
+                    COALESCE(lot.NextExpiry, p.HanSuDung) AS HanSuDung,
+                    p.TrangThai,
+                    p.NgayTao,
+                    p.NgayCapNhat
+                FROM Products p
+                OUTER APPLY
+                (
+                    SELECT
+                        SUM(CASE
+                            WHEN pl.HanSuDung IS NULL OR pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.SoLuongTonLo
+                            ELSE 0
+                        END) AS SellableQty,
+                        MIN(CASE
+                            WHEN pl.SoLuongTonLo > 0
+                                 AND pl.HanSuDung IS NOT NULL
+                                 AND pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                THEN pl.HanSuDung
+                        END) AS NextExpiry
+                    FROM ProductLots pl
+                    WHERE pl.MaSP = p.MaSP
+                ) lot
                 WHERE 1 = 1");
 
             if (!string.IsNullOrWhiteSpace(request.Keyword))
             {
                 sqlBuilder.Append(@"
                     AND (
-                        TenSP LIKE @Keyword
-                        OR MaVach LIKE @Keyword
+                        p.TenSP LIKE @Keyword
+                        OR p.MaVach LIKE @Keyword
                     )");
             }
 
             if (request.MaLoai.HasValue)
             {
                 sqlBuilder.Append(@"
-                    AND MaLoai = @MaLoai");
+                    AND p.MaLoai = @MaLoai");
             }
 
             if (request.TrangThai.HasValue)
             {
                 sqlBuilder.Append(@"
-                    AND TrangThai = @TrangThai");
+                    AND p.TrangThai = @TrangThai");
             }
 
             sqlBuilder.Append(@"
-                ORDER BY MaSP DESC");
+                ORDER BY p.MaSP DESC");
 
             return _dbHelper.Query<ProductDTO>(
                 sqlBuilder.ToString(),
@@ -154,6 +226,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaLoai,
                     HinhAnh,
                     MoTa,
+                    HanSuDung,
                     TrangThai,
                     NgayTao,
                     NgayCapNhat
@@ -169,6 +242,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     @MaLoai,
                     @HinhAnh,
                     @MoTa,
+                    @HanSuDung,
                     @TrangThai,
                     @NgayTao,
                     @NgayCapNhat
@@ -191,6 +265,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaLoai = @MaLoai,
                     HinhAnh = @HinhAnh,
                     MoTa = @MoTa,
+                    HanSuDung = @HanSuDung,
                     TrangThai = @TrangThai,
                     NgayCapNhat = @NgayCapNhat
                 WHERE MaSP = @MaSP";

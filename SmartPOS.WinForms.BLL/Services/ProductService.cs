@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.Common.Constants;
 using SmartPOS.WinForms.Common.Helpers;
@@ -193,7 +194,11 @@ namespace SmartPOS.WinForms.BLL.Services
                 return false;
             }
 
-            ProductDTO existingProduct = _productRepository.GetByBarcode(maVach.Trim());
+            string barcode = maVach.Trim();
+            ProductDTO existingProduct = _productRepository.GetAll()
+                .FirstOrDefault(x =>
+                    !ValidationHelper.IsNullOrWhiteSpace(x.MaVach) &&
+                    string.Equals(x.MaVach.Trim(), barcode, StringComparison.OrdinalIgnoreCase));
             if (existingProduct == null)
             {
                 return false;

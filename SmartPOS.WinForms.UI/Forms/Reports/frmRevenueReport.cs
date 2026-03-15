@@ -10,6 +10,9 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
     public class frmRevenueReport : Form
     {
         private readonly IInvoiceService _invoiceService;
+        private readonly bool _usePresetRange;
+        private readonly DateTime _presetFromDate;
+        private readonly DateTime _presetToDate;
 
         private Label lblTitle;
         private Label lblSubtitle;
@@ -26,6 +29,15 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
         public frmRevenueReport()
         {
             _invoiceService = new InvoiceService();
+            InitializeComponent();
+        }
+
+        public frmRevenueReport(DateTime fromDate, DateTime toDate)
+        {
+            _invoiceService = new InvoiceService();
+            _usePresetRange = true;
+            _presetFromDate = fromDate.Date;
+            _presetToDate = toDate.Date;
             InitializeComponent();
         }
 
@@ -115,8 +127,17 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
 
         private void FrmRevenueReport_Load(object sender, EventArgs e)
         {
-            dtpFromDate.Value = DateTime.Today.AddMonths(-1);
-            dtpToDate.Value = DateTime.Today;
+            if (_usePresetRange)
+            {
+                dtpFromDate.Value = _presetFromDate;
+                dtpToDate.Value = _presetToDate;
+            }
+            else
+            {
+                dtpFromDate.Value = DateTime.Today.AddMonths(-1);
+                dtpToDate.Value = DateTime.Today;
+            }
+
             RecalcLayout();
             LoadReport();
         }

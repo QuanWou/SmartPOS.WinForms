@@ -1,13 +1,14 @@
-﻿using SmartPOS.WinForms.BLL.Interfaces;
-using SmartPOS.WinForms.UI.Forms.Invoices;
+using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Forms.Invoices;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -15,6 +16,17 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 {
     public class frmPOS : Form
     {
+        private static readonly Color SurfaceColor = Color.White;
+        private static readonly Color PageColor = Color.FromArgb(248, 249, 251);
+        private static readonly Color FieldColor = Color.FromArgb(245, 247, 252);
+        private static readonly Color BorderColor = Color.FromArgb(232, 235, 244);
+        private static readonly Color PrimaryDark = Color.FromArgb(22, 32, 72);
+        private static readonly Color PrimaryMid = Color.FromArgb(90, 110, 200);
+        private static readonly Color TextMain = Color.FromArgb(14, 18, 38);
+        private static readonly Color TextSoft = Color.FromArgb(120, 132, 160);
+        private static readonly Color CardTint = Color.FromArgb(249, 251, 255);
+        private static readonly Color DangerColor = Color.FromArgb(227, 88, 88);
+
         private readonly IProductService _productService;
         private readonly IInvoiceService _invoiceService;
 
@@ -36,7 +48,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private Button btnLamMoi;
 
         private FlowLayoutPanel flpProducts;
-        private ListView lvCart;
+        private FlowLayoutPanel flpCartItems;
 
         private Label lblTongMon;
         private Label lblTongTien;
@@ -56,15 +68,17 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
         private void InitializeComponent()
         {
-            this.Text = "Bán hàng";
+            this.Text = "B\u00e1n h\u00e0ng";
             this.FormBorderStyle = FormBorderStyle.None;
-            this.BackColor = Color.FromArgb(248, 249, 251);
+            this.BackColor = PageColor;
             this.Font = new Font("Segoe UI", 9F);
             this.Dock = DockStyle.Fill;
+            this.KeyPreview = true;
 
             BuildLayout();
 
             this.Load += FrmPOS_Load;
+            this.KeyDown += FrmPOS_KeyDown;
         }
 
         private void FrmPOS_Load(object sender, EventArgs e)
@@ -73,12 +87,29 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             RefreshCartView();
         }
 
+        private void FrmPOS_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.F1)
+            {
+                e.SuppressKeyPress = true;
+                BtnThanhToan_Click(this, EventArgs.Empty);
+                return;
+            }
+
+            if (e.KeyCode == Keys.F2)
+            {
+                e.SuppressKeyPress = true;
+                txtSearch.Focus();
+                txtSearch.SelectAll();
+            }
+        }
+
         private void BuildLayout()
         {
             pnlLeft = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(248, 249, 251),
+                BackColor = PageColor,
                 Padding = new Padding(20, 20, 10, 20)
             };
 
@@ -86,7 +117,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Dock = DockStyle.Right,
                 Width = 360,
-                BackColor = Color.FromArgb(248, 249, 251),
+                BackColor = PageColor,
                 Padding = new Padding(10, 20, 20, 20)
             };
 
@@ -103,24 +134,24 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Dock = DockStyle.Top,
                 Height = 110,
-                BackColor = Color.White,
+                BackColor = SurfaceColor,
                 Padding = new Padding(18, 16, 18, 16)
             };
 
             lblTitle = new Label
             {
-                Text = "Bán hàng tại quầy",
+                Text = "B\u00e1n h\u00e0ng t\u1ea1i qu\u1ea7y",
                 Font = new Font("Segoe UI Semibold", 16F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(22, 32, 72),
+                ForeColor = PrimaryDark,
                 AutoSize = true,
                 Location = new Point(18, 14)
             };
 
             lblSubtitle = new Label
             {
-                Text = "Tìm sản phẩm theo tên hoặc mã vạch để thêm vào giỏ hàng",
+                Text = "T\u00ecm s\u1ea3n ph\u1ea9m theo t\u00ean ho\u1eb7c m\u00e3 v\u1ea1ch \u0111\u1ec3 th\u00eam v\u00e0o gi\u1ecf h\u00e0ng",
                 Font = new Font("Segoe UI", 9F),
-                ForeColor = Color.Gray,
+                ForeColor = TextSoft,
                 AutoSize = true,
                 Location = new Point(18, 44)
             };
@@ -129,12 +160,12 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Size = new Size(620, 40),
                 Location = new Point(18, 60),
-                BackColor = Color.FromArgb(245, 247, 252)
+                BackColor = FieldColor
             };
 
             lblSearch = new Label
             {
-                Text = "Tìm kiếm",
+                Text = "T\u00ecm ki\u1ebfm",
                 AutoSize = true,
                 Visible = false
             };
@@ -150,10 +181,10 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             btnScan = new Button
             {
-                Text = "Tìm",
+                Text = "T\u00ecm",
                 Size = new Size(80, 28),
                 Location = new Point(450, 6),
-                BackColor = Color.FromArgb(90, 110, 200),
+                BackColor = PrimaryMid,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
@@ -162,10 +193,10 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             btnLamMoi = new Button
             {
-                Text = "Làm mới",
+                Text = "L\u00e0m m\u1edbi",
                 Size = new Size(80, 28),
                 Location = new Point(536, 6),
-                BackColor = Color.FromArgb(230, 233, 240),
+                BackColor = FieldColor,
                 ForeColor = Color.Black,
                 FlatStyle = FlatStyle.Flat
             };
@@ -183,7 +214,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlProducts = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.White,
+                BackColor = SurfaceColor,
                 Padding = new Padding(14)
             };
 
@@ -193,7 +224,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoScroll = true,
                 WrapContents = true,
                 FlowDirection = FlowDirection.LeftToRight,
-                BackColor = Color.White
+                BackColor = SurfaceColor
             };
 
             pnlProducts.Controls.Add(flpProducts);
@@ -208,24 +239,24 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Dock = DockStyle.Top,
                 Height = 60,
-                BackColor = Color.White,
+                BackColor = SurfaceColor,
                 Padding = new Padding(16, 14, 16, 10)
             };
 
-            var lblCartTitle = new Label
+            Label lblCartTitle = new Label
             {
-                Text = "Giỏ hàng",
+                Text = "Gi\u1ecf h\u00e0ng",
                 Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(22, 32, 72),
+                ForeColor = PrimaryDark,
                 AutoSize = true,
                 Location = new Point(16, 14)
             };
 
             lblTongMon = new Label
             {
-                Text = "0 sản phẩm",
+                Text = "0 s\u1ea3n ph\u1ea9m",
                 Font = new Font("Segoe UI", 9F),
-                ForeColor = Color.Gray,
+                ForeColor = TextSoft,
                 AutoSize = true,
                 Location = new Point(230, 18)
             };
@@ -237,34 +268,34 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Dock = DockStyle.Bottom,
                 Height = 120,
-                BackColor = Color.White,
+                BackColor = SurfaceColor,
                 Padding = new Padding(16, 12, 16, 16)
             };
 
             lblTongTien = new Label
             {
-                Text = "Tổng tiền",
+                Text = "T\u1ed5ng ti\u1ec1n",
                 Font = new Font("Segoe UI", 10F),
-                ForeColor = Color.FromArgb(70, 70, 70),
+                ForeColor = TextSoft,
                 AutoSize = true,
                 Location = new Point(16, 14)
             };
 
             lblTongTienValue = new Label
             {
-                Text = "0 đ",
+                Text = "0 \u0111",
                 Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(22, 32, 72),
+                ForeColor = PrimaryDark,
                 AutoSize = true,
                 Location = new Point(16, 38)
             };
 
             btnThanhToan = new Button
             {
-                Text = "Thanh toán",
+                Text = "Thanh to\u00e1n",
                 Size = new Size(310, 38),
                 Location = new Point(16, 74),
-                BackColor = Color.FromArgb(22, 32, 72),
+                BackColor = PrimaryDark,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
@@ -278,25 +309,20 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlCartBody = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.White,
+                BackColor = SurfaceColor,
                 Padding = new Padding(16, 10, 16, 10)
             };
 
-            lvCart = new ListView
+            flpCartItems = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                View = View.Details,
-                FullRowSelect = true,
-                GridLines = true,
-                HideSelection = false
+                AutoScroll = true,
+                WrapContents = false,
+                FlowDirection = FlowDirection.TopDown,
+                BackColor = SurfaceColor
             };
 
-            lvCart.Columns.Add("Sản phẩm", 150);
-            lvCart.Columns.Add("SL", 45);
-            lvCart.Columns.Add("Đơn giá", 90);
-            lvCart.DoubleClick += LvCart_DoubleClick;
-
-            pnlCartBody.Controls.Add(lvCart);
+            pnlCartBody.Controls.Add(flpCartItems);
 
             pnlRight.Controls.Add(pnlCartBody);
             pnlRight.Controls.Add(pnlCartFooter);
@@ -306,7 +332,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private void LoadProducts()
         {
             _products = _productService.GetAll()
-                .Where(x => x.TrangThai)
+                .Where(x => x.TrangThai && !IsExpiredProduct(x))
                 .ToList();
 
             RenderProducts(_products);
@@ -316,7 +342,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         {
             flpProducts.Controls.Clear();
 
-            foreach (var product in products)
+            foreach (ProductDTO product in products)
             {
                 flpProducts.Controls.Add(BuildProductCard(product));
             }
@@ -328,16 +354,17 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Size = new Size(165, 130),
                 Margin = new Padding(8),
-                BackColor = Color.FromArgb(250, 250, 252),
-                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = CardTint,
+                BorderStyle = BorderStyle.None,
                 Cursor = Cursors.Hand
             };
+            card.Paint += ProductCard_Paint;
 
             Label lblTen = new Label
             {
                 Text = product.TenSP,
                 Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(22, 32, 72),
+                ForeColor = PrimaryDark,
                 AutoSize = false,
                 Size = new Size(135, 36),
                 Location = new Point(12, 14)
@@ -345,32 +372,33 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             Label lblMa = new Label
             {
-                Text = "Mã: " + product.MaVach,
+                Text = "M\u00e3: " + product.MaVach,
                 Font = new Font("Segoe UI", 8.5F),
-                ForeColor = Color.Gray,
+                ForeColor = TextSoft,
                 AutoSize = true,
                 Location = new Point(12, 58)
             };
 
             Label lblGia = new Label
             {
-                Text = product.GiaBan.ToString("N0") + " đ",
+                Text = product.GiaBan.ToString("N0") + " \u0111",
                 Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(90, 110, 200),
+                ForeColor = PrimaryMid,
                 AutoSize = true,
                 Location = new Point(12, 84)
             };
 
             Button btnThem = new Button
             {
-                Text = "Thêm",
+                Text = "Th\u00eam",
                 Size = new Size(56, 26),
                 Location = new Point(95, 80),
-                BackColor = Color.FromArgb(22, 32, 72),
+                BackColor = PrimaryDark,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
             btnThem.FlatAppearance.BorderSize = 0;
+            btnThem.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 55, 100);
             btnThem.Click += (s, e) => AddToCart(product);
 
             card.Controls.Add(lblTen);
@@ -390,7 +418,13 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             if (product.SoLuongTon <= 0)
             {
-                MessageBox.Show("Sản phẩm đã hết hàng.", "Thông báo");
+                MessageBox.Show("S\u1ea3n ph\u1ea9m \u0111\u00e3 h\u1ebft h\u00e0ng.", "Th\u00f4ng b\u00e1o");
+                return;
+            }
+
+            if (IsExpiredProduct(product))
+            {
+                MessageBox.Show("S\u1ea3n ph\u1ea9m \u0111\u00e3 h\u1ebft h\u1ea1n s\u1eed d\u1ee5ng.", "Th\u00f4ng b\u00e1o");
                 return;
             }
 
@@ -399,7 +433,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             if (soLuongTrongGio + 1 > product.SoLuongTon)
             {
-                MessageBox.Show("Số lượng vượt quá tồn kho.", "Thông báo");
+                MessageBox.Show("S\u1ed1 l\u01b0\u1ee3ng v\u01b0\u1ee3t qu\u00e1 t\u1ed3n kho.", "Th\u00f4ng b\u00e1o");
                 return;
             }
 
@@ -423,22 +457,222 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
         private void RefreshCartView()
         {
-            lvCart.Items.Clear();
-
-            foreach (var item in _cartItems)
-            {
-                var listItem = new ListViewItem(item.TenSP);
-                listItem.SubItems.Add(item.SoLuong.ToString());
-                listItem.SubItems.Add(item.DonGia.ToString("N0"));
-                listItem.Tag = item.MaSP;
-                lvCart.Items.Add(listItem);
-            }
+            RenderCartItems();
 
             int tongMon = _cartItems.Sum(x => x.SoLuong);
             decimal tongTien = _cartItems.Sum(x => x.SoLuong * x.DonGia);
 
-            lblTongMon.Text = tongMon + " sản phẩm";
-            lblTongTienValue.Text = tongTien.ToString("N0") + " đ";
+            lblTongMon.Text = tongMon + " s\u1ea3n ph\u1ea9m";
+            lblTongTienValue.Text = tongTien.ToString("N0") + " \u0111";
+        }
+
+        private void RenderCartItems()
+        {
+            flpCartItems.SuspendLayout();
+            flpCartItems.Controls.Clear();
+
+            if (_cartItems.Count == 0)
+            {
+                Label lblEmpty = new Label
+                {
+                    Text = "Gi\u1ecf h\u00e0ng \u0111ang tr\u1ed1ng",
+                    ForeColor = TextSoft,
+                    Font = new Font("Segoe UI", 10F),
+                    Size = new Size(280, 40),
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Margin = new Padding(0, 20, 0, 0)
+                };
+
+                flpCartItems.Controls.Add(lblEmpty);
+                flpCartItems.ResumeLayout();
+                return;
+            }
+
+            foreach (CartItem item in _cartItems)
+            {
+                flpCartItems.Controls.Add(BuildCartItemCard(item));
+            }
+
+            flpCartItems.ResumeLayout();
+        }
+
+        private Control BuildCartItemCard(CartItem item)
+        {
+            decimal thanhTien = item.SoLuong * item.DonGia;
+            bool canIncrease = CanIncreaseCartItemQuantity(item);
+
+            Panel card = new Panel
+            {
+                Size = new Size(280, 118),
+                Margin = new Padding(0, 0, 0, 12),
+                BackColor = CardTint,
+                BorderStyle = BorderStyle.None
+            };
+            card.Paint += CartItemCard_Paint;
+
+            Label lblTen = new Label
+            {
+                Text = item.TenSP,
+                Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
+                ForeColor = TextMain,
+                AutoSize = false,
+                Size = new Size(208, 26),
+                Location = new Point(14, 12)
+            };
+
+            Label lblCongThucGia = new Label
+            {
+                Text = item.DonGia.ToString("N0") + " \u0111 x " + item.SoLuong + " = " + thanhTien.ToString("N0") + " \u0111",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = PrimaryMid,
+                AutoSize = true,
+                Location = new Point(14, 46)
+            };
+
+            Button btnXoa = CreateCircleButton(
+                "X",
+                DangerColor,
+                Color.White,
+                new Point(236, 12),
+                true);
+            btnXoa.Click += (s, e) => RemoveCartItem(item.MaSP);
+
+            Button btnGiam = CreateCircleButton(
+                "-",
+                FieldColor,
+                TextMain,
+                new Point(14, 76),
+                true);
+            btnGiam.Click += (s, e) => UpdateCartItemQuantity(item.MaSP, -1);
+
+            Label lblSoLuong = new Label
+            {
+                Text = item.SoLuong.ToString(),
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = PrimaryDark,
+                Size = new Size(32, 26),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Location = new Point(48, 78)
+            };
+
+            Button btnTang = CreateCircleButton(
+                "+",
+                canIncrease ? PrimaryMid : FieldColor,
+                canIncrease ? Color.White : TextSoft,
+                new Point(82, 76),
+                canIncrease);
+            btnTang.Click += (s, e) => UpdateCartItemQuantity(item.MaSP, 1);
+
+            Label lblTonKho = new Label
+            {
+                Text = GetStockText(item),
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(126, 83)
+            };
+
+            card.Controls.Add(lblTen);
+            card.Controls.Add(lblCongThucGia);
+            card.Controls.Add(btnXoa);
+            card.Controls.Add(btnGiam);
+            card.Controls.Add(lblSoLuong);
+            card.Controls.Add(btnTang);
+            card.Controls.Add(lblTonKho);
+
+            return card;
+        }
+
+        private Button CreateCircleButton(
+            string text,
+            Color backColor,
+            Color foreColor,
+            Point location,
+            bool enabled)
+        {
+            Button button = new Button
+            {
+                Text = text,
+                Size = new Size(28, 28),
+                Location = location,
+                BackColor = backColor,
+                ForeColor = foreColor,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+                Enabled = enabled,
+                TabStop = false
+            };
+
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = backColor;
+
+            using (GraphicsPath path = new GraphicsPath())
+            {
+                path.AddEllipse(0, 0, button.Width, button.Height);
+                button.Region = new Region(path);
+            }
+
+            return button;
+        }
+
+        private string GetStockText(CartItem item)
+        {
+            ProductDTO product = _products.FirstOrDefault(x => x.MaSP == item.MaSP);
+            if (product == null)
+            {
+                return "T\u1ed3n: --";
+            }
+
+            return "T\u1ed3n: " + product.SoLuongTon;
+        }
+
+        private void UpdateCartItemQuantity(int maSP, int delta)
+        {
+            CartItem item = _cartItems.FirstOrDefault(x => x.MaSP == maSP);
+            if (item == null)
+            {
+                return;
+            }
+
+            if (delta > 0 && !CanIncreaseCartItemQuantity(item))
+            {
+                MessageBox.Show("S\u1ed1 l\u01b0\u1ee3ng \u0111\u00e3 ch\u1ea1m m\u1ee9c t\u1ed3n kho hi\u1ec7n t\u1ea1i.", "Th\u00f4ng b\u00e1o");
+                return;
+            }
+
+            item.SoLuong += delta;
+
+            if (item.SoLuong <= 0)
+            {
+                _cartItems.Remove(item);
+            }
+
+            RefreshCartView();
+        }
+
+        private void RemoveCartItem(int maSP)
+        {
+            CartItem item = _cartItems.FirstOrDefault(x => x.MaSP == maSP);
+            if (item == null)
+            {
+                return;
+            }
+
+            _cartItems.Remove(item);
+            RefreshCartView();
+        }
+
+        private bool CanIncreaseCartItemQuantity(CartItem item)
+        {
+            ProductDTO product = _products.FirstOrDefault(x => x.MaSP == item.MaSP);
+            return product != null && item.SoLuong < product.SoLuongTon;
+        }
+
+        private bool IsExpiredProduct(ProductDTO product)
+        {
+            return product != null
+                && product.HanSuDung.HasValue
+                && product.HanSuDung.Value.Date < DateTime.Today;
         }
 
         private void SearchProducts()
@@ -490,78 +724,40 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             LoadProducts();
         }
 
-        private void LvCart_DoubleClick(object sender, EventArgs e)
-        {
-            if (lvCart.SelectedItems.Count == 0)
-            {
-                return;
-            }
-
-            int maSP = (int)lvCart.SelectedItems[0].Tag;
-            CartItem item = _cartItems.FirstOrDefault(x => x.MaSP == maSP);
-            if (item == null)
-            {
-                return;
-            }
-
-            DialogResult result = MessageBox.Show(
-                "Chọn Yes để giảm 1 số lượng.\nChọn No để xóa sản phẩm khỏi giỏ hàng.",
-                "Cập nhật giỏ hàng",
-                MessageBoxButtons.YesNoCancel,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Cancel)
-            {
-                return;
-            }
-
-            if (result == DialogResult.Yes)
-            {
-                item.SoLuong -= 1;
-
-                if (item.SoLuong <= 0)
-                {
-                    _cartItems.Remove(item);
-                }
-            }
-            else if (result == DialogResult.No)
-            {
-                _cartItems.Remove(item);
-            }
-
-            RefreshCartView();
-        }
-
         private void BtnThanhToan_Click(object sender, EventArgs e)
         {
             if (_cartItems.Count == 0)
             {
-                MessageBox.Show("Giỏ hàng đang trống.", "Thông báo");
+                MessageBox.Show("Gi\u1ecf h\u00e0ng \u0111ang tr\u1ed1ng.", "Th\u00f4ng b\u00e1o");
                 return;
             }
 
             if (SessionManager.CurrentUser == null)
             {
-                MessageBox.Show("Không xác định được nhân viên đăng nhập.", "Thông báo");
+                MessageBox.Show("Kh\u00f4ng x\u00e1c \u0111\u1ecbnh \u0111\u01b0\u1ee3c nh\u00e2n vi\u00ean \u0111\u0103ng nh\u1eadp.", "Th\u00f4ng b\u00e1o");
                 return;
             }
 
             decimal tongTien = _cartItems.Sum(x => x.SoLuong * x.DonGia);
 
-            using (var frmCash = new frmCashPayment(tongTien))
+            string paymentMethodLabel;
+
+            using (frmCashPayment frmCash = new frmCashPayment(tongTien))
             {
-                var dialogResult = frmCash.ShowDialog(this);
+                DialogResult dialogResult = frmCash.ShowDialog(this);
 
                 if (dialogResult != DialogResult.OK || !frmCash.IsConfirmed)
                 {
                     return;
                 }
+
+                paymentMethodLabel = frmCash.PaymentMethodLabel;
             }
 
             CheckoutRequest request = new CheckoutRequest
             {
                 MaNV = SessionManager.CurrentUser.MaNV,
-                GhiChu = "Bán tại quầy",
+                GhiChu = "B\u00e1n t\u1ea1i qu\u1ea7y - " + paymentMethodLabel,
                 ChiTietHoaDon = _cartItems.Select(x => new InvoiceDetailDTO
                 {
                     MaSP = x.MaSP,
@@ -575,7 +771,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             MessageBox.Show(
                 result.Message,
-                "Thông báo",
+                "Th\u00f4ng b\u00e1o",
                 MessageBoxButtons.OK,
                 result.IsSuccess ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
 
@@ -590,19 +786,47 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 if (maHD.HasValue && maHD.Value > 0)
                 {
                     DialogResult viewResult = MessageBox.Show(
-                        "Thanh toán thành công. Bạn có muốn xem chi tiết hóa đơn không?",
-                        "Thông báo",
+                        "Thanh to\u00e1n th\u00e0nh c\u00f4ng. B\u1ea1n c\u00f3 mu\u1ed1n xem chi ti\u1ebft h\u00f3a \u0111\u01a1n kh\u00f4ng?",
+                        "Th\u00f4ng b\u00e1o",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question);
 
                     if (viewResult == DialogResult.Yes)
                     {
-                        using (var frm = new SmartPOS.WinForms.UI.Forms.Invoices.frmInvoiceDetails(maHD.Value))
+                        using (frmInvoiceDetails frm = new frmInvoiceDetails(maHD.Value))
                         {
                             frm.ShowDialog(this);
                         }
                     }
                 }
+            }
+        }
+
+        private void CartItemCard_Paint(object sender, PaintEventArgs e)
+        {
+            Panel card = sender as Panel;
+            if (card == null)
+            {
+                return;
+            }
+
+            using (Pen pen = new Pen(BorderColor))
+            {
+                e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+            }
+        }
+
+        private void ProductCard_Paint(object sender, PaintEventArgs e)
+        {
+            Panel card = sender as Panel;
+            if (card == null)
+            {
+                return;
+            }
+
+            using (Pen pen = new Pen(BorderColor))
+            {
+                e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
             }
         }
 

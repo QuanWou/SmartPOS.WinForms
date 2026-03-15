@@ -56,6 +56,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaSP,
                     SoLuong,
                     GiaNhapLucNhap,
+                    HanSuDung,
                     ThanhTien
                 FROM StockInDetails
                 WHERE MaPN = @MaPN
@@ -112,6 +113,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                                 MaSP,
                                 SoLuong,
                                 GiaNhapLucNhap,
+                                HanSuDung,
                                 ThanhTien
                             )
                             VALUES
@@ -120,10 +122,12 @@ namespace SmartPOS.WinForms.DAL.Repositories
                                 @MaSP,
                                 @SoLuong,
                                 @GiaNhapLucNhap,
+                                @HanSuDung,
                                 @ThanhTien
-                            )";
+                            );
+                            SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
-                        scope.Connection.Execute(
+                        int maCTPN = scope.Connection.ExecuteScalar<int>(
                             sqlDetail,
                             new
                             {
@@ -131,15 +135,73 @@ namespace SmartPOS.WinForms.DAL.Repositories
                                 item.MaSP,
                                 item.SoLuong,
                                 item.GiaNhapLucNhap,
+                                item.HanSuDung,
                                 item.ThanhTien
+                            },
+                            scope.Transaction);
+
+                        string sqlLot = @"
+                            INSERT INTO ProductLots
+                            (
+                                MaPN,
+                                MaCTPN,
+                                MaSP,
+                                NgayNhap,
+                                HanSuDung,
+                                SoLuongNhap,
+                                SoLuongTonLo,
+                                GiaNhapLucNhap,
+                                GhiChu
+                            )
+                            VALUES
+                            (
+                                @MaPN,
+                                @MaCTPN,
+                                @MaSP,
+                                GETDATE(),
+                                @HanSuDung,
+                                @SoLuongNhap,
+                                @SoLuongTonLo,
+                                @GiaNhapLucNhap,
+                                @GhiChu
+                            )";
+
+                        scope.Connection.Execute(
+                            sqlLot,
+                            new
+                            {
+                                MaPN = maPN,
+                                MaCTPN = maCTPN,
+                                item.MaSP,
+                                item.HanSuDung,
+                                SoLuongNhap = item.SoLuong,
+                                SoLuongTonLo = item.SoLuong,
+                                item.GiaNhapLucNhap,
+                                request.GhiChu
                             },
                             scope.Transaction);
 
                         string sqlUpdateProduct = @"
                             UPDATE Products
                             SET
-                                SoLuongTon = SoLuongTon + @SoLuong,
+                                SoLuongTon = (
+                                    SELECT ISNULL(SUM(CASE
+                                        WHEN pl.HanSuDung IS NULL OR pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                            THEN pl.SoLuongTonLo
+                                        ELSE 0
+                                    END), 0)
+                                    FROM ProductLots pl
+                                    WHERE pl.MaSP = @MaSP
+                                ),
                                 GiaNhap = @GiaNhapLucNhap,
+                                HanSuDung = (
+                                    SELECT MIN(pl.HanSuDung)
+                                    FROM ProductLots pl
+                                    WHERE pl.MaSP = @MaSP
+                                      AND pl.SoLuongTonLo > 0
+                                      AND pl.HanSuDung IS NOT NULL
+                                      AND pl.HanSuDung >= CAST(GETDATE() AS DATE)
+                                ),
                                 NgayCapNhat = GETDATE()
                             WHERE MaSP = @MaSP";
 
@@ -149,7 +211,8 @@ namespace SmartPOS.WinForms.DAL.Repositories
                             {
                                 item.MaSP,
                                 item.SoLuong,
-                                item.GiaNhapLucNhap
+                                item.GiaNhapLucNhap,
+                                item.HanSuDung
                             },
                             scope.Transaction);
                     }

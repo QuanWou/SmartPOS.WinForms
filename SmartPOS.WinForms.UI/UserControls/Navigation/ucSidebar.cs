@@ -57,11 +57,6 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             ("◫",  "Nhập kho",             "ManageStock"),
             ("↺",  "Lịch sử nhập kho",     "StockAdjust"),
             ("⇄",  "Chuyển kho",           "StockTransfer"),
-            ("---","",                     "sep3"),
-
-            ("⚙",  "Quản trị hệ thống",    "SuperAdmin"),
-            ("◈",  "Ứng dụng",             "Applications"),
-            ("▤",  "Giao diện",            "Layouts"),
         };
 
         public UcSidebar()
