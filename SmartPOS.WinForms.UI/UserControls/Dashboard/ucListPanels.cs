@@ -2,6 +2,8 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace SmartPOS.WinForms.UI.UserControls.Dashboard
@@ -328,6 +330,320 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             };
 
             return row;
+        }
+    }
+
+    public enum DashboardListTone
+    {
+        Warning,
+        Danger
+    }
+
+    public sealed class DashboardInsightItem
+    {
+        public string Title { get; set; }
+
+        public string Subtitle { get; set; }
+
+        public string BadgeText { get; set; }
+    }
+
+    public sealed class DashboardTopProductItem
+    {
+        public string ProductName { get; set; }
+
+        public int QuantitySold { get; set; }
+
+        public decimal Revenue { get; set; }
+    }
+
+    public class UcInsightListPanel : UserControl
+    {
+        private List<DashboardInsightItem> _items = new List<DashboardInsightItem>();
+        private string _title = "Danh sách";
+        private string _subtitle = string.Empty;
+        private string _emptyMessage = "Không có dữ liệu";
+
+        public DashboardListTone Tone { get; set; } = DashboardListTone.Warning;
+
+        public UcInsightListPanel()
+        {
+            DoubleBuffered = true;
+            BackColor = Palette.BgPage;
+            Cursor = Cursors.Hand;
+            Resize += (s, e) => Invalidate();
+            Paint += OnPaint;
+        }
+
+        public void SetData(
+            string title,
+            string subtitle,
+            IEnumerable<DashboardInsightItem> items,
+            string emptyMessage)
+        {
+            _title = string.IsNullOrWhiteSpace(title) ? "Danh sách" : title;
+            _subtitle = subtitle ?? string.Empty;
+            _emptyMessage = string.IsNullOrWhiteSpace(emptyMessage)
+                ? "Không có dữ liệu"
+                : emptyMessage;
+            _items = items == null
+                ? new List<DashboardInsightItem>()
+                : items.Where(x => x != null).Take(5).ToList();
+
+            Invalidate();
+        }
+
+        private void OnPaint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            GdiHelper.SetQuality(g);
+            int width = Width;
+            int height = Height;
+            if (width < 40 || height < 40)
+            {
+                return;
+            }
+
+            GdiHelper.DrawCard(g, width, height);
+
+            using var titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            using var subFont = new Font("Segoe UI", 8f);
+            using var titleBrush = new SolidBrush(Palette.Navy);
+            using var subBrush = new SolidBrush(Palette.NavyLight);
+            using var dividerPen = new Pen(Palette.GridLine, 1f);
+
+            g.DrawString(_title, titleFont, titleBrush, 16f, 14f);
+            g.DrawString(_subtitle, subFont, subBrush, 16f, 33f);
+            g.DrawLine(dividerPen, 0, 56, width, 56);
+
+            if (_items.Count == 0)
+            {
+                using var emptyFont = new Font("Segoe UI", 9f, FontStyle.Regular);
+                using var emptyBrush = new SolidBrush(Palette.NavyLight);
+                var emptyRect = new RectangleF(16f, 72f, width - 32f, height - 88f);
+                using var sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                g.DrawString(_emptyMessage, emptyFont, emptyBrush, emptyRect, sf);
+                return;
+            }
+
+            Color accent = Tone == DashboardListTone.Warning
+                ? Color.FromArgb(148, 88, 0)
+                : Color.FromArgb(156, 56, 56);
+            Color badgeBg = Tone == DashboardListTone.Warning
+                ? Color.FromArgb(255, 246, 220)
+                : Color.FromArgb(255, 237, 236);
+            Color iconBg = Tone == DashboardListTone.Warning
+                ? Color.FromArgb(255, 239, 202)
+                : Color.FromArgb(255, 228, 226);
+
+            using var titleRowFont = new Font("Segoe UI", 9f, FontStyle.Bold);
+            using var subtitleRowFont = new Font("Segoe UI", 7.75f, FontStyle.Regular);
+            using var badgeFont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            using var titleRowBrush = new SolidBrush(Palette.Navy);
+            using var subtitleRowBrush = new SolidBrush(Palette.NavyLight);
+            using var accentBrush = new SolidBrush(accent);
+            using var iconBrush = new SolidBrush(iconBg);
+            using var badgeTextBrush = new SolidBrush(accent);
+            using var noWrap = new StringFormat
+            {
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+
+            const int rowHeight = 38;
+            float y = 68f;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                DashboardInsightItem item = _items[i];
+                float circleX = 16f;
+                float circleY = y + 2f;
+                g.FillEllipse(iconBrush, circleX, circleY, 26f, 26f);
+
+                string rank = (i + 1).ToString();
+                using var rankFont = new Font("Segoe UI", 8f, FontStyle.Bold);
+                var rankSize = g.MeasureString(rank, rankFont);
+                g.DrawString(
+                    rank,
+                    rankFont,
+                    accentBrush,
+                    circleX + 13f - rankSize.Width / 2f,
+                    circleY + 13f - rankSize.Height / 2f);
+
+                float textX = 52f;
+                float textWidth = width - 160f;
+                g.DrawString(
+                    item.Title ?? string.Empty,
+                    titleRowFont,
+                    titleRowBrush,
+                    new RectangleF(textX, y + 1f, textWidth, 16f),
+                    noWrap);
+                g.DrawString(
+                    item.Subtitle ?? string.Empty,
+                    subtitleRowFont,
+                    subtitleRowBrush,
+                    new RectangleF(textX, y + 18f, textWidth, 14f),
+                    noWrap);
+
+                string badgeText = item.BadgeText ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(badgeText))
+                {
+                    SizeF badgeSize = g.MeasureString(badgeText, badgeFont);
+                    Rectangle badgeRect = new Rectangle(
+                        width - (int)badgeSize.Width - 32,
+                        (int)y + 7,
+                        (int)badgeSize.Width + 16,
+                        20);
+
+                    using var badgePath = GdiHelper.RoundedRect(badgeRect, 7);
+                    using var badgeBrush = new SolidBrush(badgeBg);
+                    g.FillPath(badgeBrush, badgePath);
+                    g.DrawString(
+                        badgeText,
+                        badgeFont,
+                        badgeTextBrush,
+                        badgeRect.X + 8f,
+                        badgeRect.Y + 3f);
+                }
+
+                if (i < _items.Count - 1)
+                {
+                    g.DrawLine(dividerPen, 16, y + rowHeight, width - 16, y + rowHeight);
+                }
+
+                y += rowHeight;
+            }
+        }
+    }
+
+    public class UcTopProductsChart : UserControl
+    {
+        private List<DashboardTopProductItem> _items = new List<DashboardTopProductItem>();
+        private string _subtitle = "30 ngày gần nhất";
+
+        private static readonly Color[] BarColors =
+        {
+            Color.FromArgb(30, 40, 80),
+            Color.FromArgb(54, 72, 120),
+            Color.FromArgb(80, 100, 160),
+            Color.FromArgb(112, 130, 182),
+            Color.FromArgb(150, 162, 190)
+        };
+
+        public UcTopProductsChart()
+        {
+            DoubleBuffered = true;
+            BackColor = Palette.BgPage;
+            Resize += (s, e) => Invalidate();
+            Paint += OnPaint;
+        }
+
+        public void SetData(IEnumerable<DashboardTopProductItem> items, string subtitle)
+        {
+            _items = items == null
+                ? new List<DashboardTopProductItem>()
+                : items.Where(x => x != null).Take(5).ToList();
+            _subtitle = string.IsNullOrWhiteSpace(subtitle)
+                ? "30 ngày gần nhất"
+                : subtitle;
+
+            Invalidate();
+        }
+
+        private void OnPaint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            GdiHelper.SetQuality(g);
+            int width = Width;
+            int height = Height;
+            if (width < 40 || height < 40)
+            {
+                return;
+            }
+
+            GdiHelper.DrawCard(g, width, height);
+
+            using var titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            using var subFont = new Font("Segoe UI", 8f);
+            using var titleBrush = new SolidBrush(Palette.Navy);
+            using var subBrush = new SolidBrush(Palette.NavyLight);
+
+            g.DrawString("Top 5 sản phẩm bán chạy", titleFont, titleBrush, 16f, 14f);
+            g.DrawString(_subtitle, subFont, subBrush, 16f, 33f);
+
+            if (_items.Count == 0)
+            {
+                using var emptyFont = new Font("Segoe UI", 9f, FontStyle.Regular);
+                var emptyRect = new RectangleF(16f, 60f, width - 32f, height - 76f);
+                using var sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                g.DrawString("Chưa có dữ liệu bán hàng để hiển thị.", emptyFont, subBrush, emptyRect, sf);
+                return;
+            }
+
+            int maxQuantity = Math.Max(1, _items.Max(x => x.QuantitySold));
+            using var nameFont = new Font("Segoe UI", 8.75f, FontStyle.Bold);
+            using var detailFont = new Font("Segoe UI", 7.75f, FontStyle.Regular);
+            using var qtyFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            using var nameBrush = new SolidBrush(Palette.Navy);
+            using var detailBrush = new SolidBrush(Palette.NavyLight);
+            using var trackBrush = new SolidBrush(Color.FromArgb(235, 237, 247));
+            using var noWrap = new StringFormat
+            {
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+
+            const int rowHeight = 46;
+            float y = 64f;
+            for (int i = 0; i < _items.Count; i++)
+            {
+                DashboardTopProductItem item = _items[i];
+                using var rankFont = new Font("Segoe UI", 8f, FontStyle.Bold);
+                using var rankBrush = new SolidBrush(BarColors[i % BarColors.Length]);
+                g.DrawString((i + 1).ToString(), rankFont, rankBrush, 16f, y + 2f);
+
+                float textX = 34f;
+                g.DrawString(
+                    item.ProductName ?? string.Empty,
+                    nameFont,
+                    nameBrush,
+                    new RectangleF(textX, y, width - 150f, 16f),
+                    noWrap);
+
+                g.DrawString(
+                    "Doanh thu " + item.Revenue.ToString("N0") + " đ",
+                    detailFont,
+                    detailBrush,
+                    new RectangleF(textX, y + 18f, width - 150f, 14f),
+                    noWrap);
+
+                string qtyLabel = item.QuantitySold.ToString("N0") + " đã bán";
+                SizeF qtySize = g.MeasureString(qtyLabel, qtyFont);
+                float qtyX = width - qtySize.Width - 16f;
+                g.DrawString(qtyLabel, qtyFont, nameBrush, qtyX, y + 1f);
+
+                Rectangle trackRect = new Rectangle((int)textX, (int)y + 33, width - 112, 8);
+                using var trackPath = GdiHelper.RoundedRect(trackRect, 4);
+                g.FillPath(trackBrush, trackPath);
+
+                int fillWidth = (int)((float)item.QuantitySold / maxQuantity * trackRect.Width);
+                if (fillWidth > 0)
+                {
+                    Rectangle fillRect = new Rectangle(trackRect.X, trackRect.Y, fillWidth, trackRect.Height);
+                    using var fillPath = GdiHelper.RoundedRect(fillRect, 4);
+                    using var fillBrush = new SolidBrush(BarColors[i % BarColors.Length]);
+                    g.FillPath(fillBrush, fillPath);
+                }
+
+                y += rowHeight;
+            }
         }
     }
 }

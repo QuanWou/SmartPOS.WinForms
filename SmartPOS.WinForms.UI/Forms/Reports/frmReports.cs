@@ -181,6 +181,7 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
             dtpFromDate.Value = DateTime.Today.AddMonths(-1);
             dtpToDate.Value = DateTime.Today;
             LoadSummary();
+            RenderSelectedReport();
         }
 
         private void BuildSummaryPanel()
@@ -242,64 +243,13 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
         private void BtnGenerate_Click(object sender, EventArgs e)
         {
             LoadSummary();
-
-            string selected = cboReportType.SelectedItem != null
-                ? cboReportType.SelectedItem.ToString()
-                : string.Empty;
-
-            pnlReportViewer.Controls.Clear();
-
-            if (selected == "Báo cáo doanh thu")
-            {
-                var frm = new frmRevenueReport
-                {
-                    TopLevel = false,
-                    FormBorderStyle = FormBorderStyle.None,
-                    Dock = DockStyle.Fill
-                };
-
-                pnlReportViewer.Controls.Add(frm);
-                frm.Show();
-                frm.BringToFront();
-                return;
-            }
-
-            Label lblPlaceholder = new Label
-            {
-                Text = "Loại báo cáo này sẽ được hoàn thiện ở bước tiếp theo.",
-                Font = new Font("Segoe UI Semibold", 16F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(180, 185, 200),
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-
-            pnlReportViewer.Controls.Add(lblPlaceholder);
+            RenderSelectedReport();
         }
 
         private void BtnPreview_Click(object sender, EventArgs e)
         {
-            string selected = cboReportType.SelectedItem != null
-                ? cboReportType.SelectedItem.ToString()
-                : string.Empty;
-
-            if (selected == "Báo cáo doanh thu")
-            {
-                pnlReportViewer.Controls.Clear();
-
-                var frm = new frmRevenueReport
-                {
-                    TopLevel = false,
-                    FormBorderStyle = FormBorderStyle.None,
-                    Dock = DockStyle.Fill
-                };
-
-                pnlReportViewer.Controls.Add(frm);
-                frm.Show();
-                frm.BringToFront();
-                return;
-            }
-
-            MessageBox.Show("Chưa hỗ trợ xem trước cho loại báo cáo này.", "Thông báo");
+            LoadSummary();
+            RenderSelectedReport();
         }
 
         private void BtnExport_Click(object sender, EventArgs e)
@@ -395,7 +345,10 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
                 .ToList();
 
             var lowStockProducts = _productService.GetAll()
-                .Where(x => x.TrangThai && x.SoLuongTon <= 10)
+                .Where(x =>
+                    x.TrangThai &&
+                    x.SoLuongTon <= 10 &&
+                    (!x.HanSuDung.HasValue || x.HanSuDung.Value.Date >= DateTime.Today))
                 .ToList();
 
             decimal tongDoanhThu = invoices
@@ -410,6 +363,188 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
             lblTongHoaDon.Text = "Số hóa đơn" + Environment.NewLine + tongHoaDon.ToString();
             lblTongNhapKho.Text = "Phiếu nhập" + Environment.NewLine + tongPhieuNhap.ToString();
             lblTonKhoThap.Text = "Sắp hết hàng" + Environment.NewLine + tongSapHetHang.ToString();
+        }
+
+        private void RenderSelectedReport()
+        {
+            string selected = cboReportType.SelectedItem != null
+                ? cboReportType.SelectedItem.ToString()
+                : string.Empty;
+
+            DateTime fromDate = dtpFromDate.Value.Date;
+            DateTime toDate = dtpToDate.Value.Date;
+
+            pnlReportViewer.Controls.Clear();
+
+            if (selected == "Báo cáo doanh thu")
+            {
+                var frm = new frmRevenueReport(fromDate, toDate)
+                {
+                    TopLevel = false,
+                    FormBorderStyle = FormBorderStyle.None,
+                    Dock = DockStyle.Fill
+                };
+
+                pnlReportViewer.Controls.Add(frm);
+                frm.Show();
+                frm.BringToFront();
+                return;
+            }
+
+            if (selected == "Báo cáo hóa đơn")
+            {
+                pnlReportViewer.Controls.Add(BuildInvoiceReportView(fromDate, toDate));
+                return;
+            }
+
+            if (selected == "Báo cáo nhập kho")
+            {
+                pnlReportViewer.Controls.Add(BuildStockInReportView(fromDate, toDate));
+                return;
+            }
+
+            pnlReportViewer.Controls.Add(BuildInventoryReportView());
+        }
+
+        private Control BuildInvoiceReportView(DateTime fromDate, DateTime toDate)
+        {
+            DateTime toDateInclusive = toDate.Date.AddDays(1).AddTicks(-1);
+
+            var invoices = _invoiceService.GetAll()
+                .Where(x => x.NgayLap >= fromDate && x.NgayLap <= toDateInclusive)
+                .OrderByDescending(x => x.NgayLap)
+                .Select(x => new
+                {
+                    x.MaHD,
+                    NgayLap = x.NgayLap.ToString("dd/MM/yyyy HH:mm"),
+                    x.MaNV,
+                    TongTien = x.TongTien.ToString("N0") + " đ",
+                    TrangThai = GetInvoiceStatusLabel(x.TrangThai),
+                    GhiChu = string.IsNullOrWhiteSpace(x.GhiChu) ? "-" : x.GhiChu
+                })
+                .ToList();
+
+            return BuildGridReportView(
+                "Báo cáo hóa đơn",
+                "Danh sách hóa đơn trong khoảng thời gian đã chọn",
+                invoices);
+        }
+
+        private Control BuildStockInReportView(DateTime fromDate, DateTime toDate)
+        {
+            DateTime toDateInclusive = toDate.Date.AddDays(1).AddTicks(-1);
+
+            var stockIns = _stockInService.GetAll()
+                .Where(x => x.NgayNhap >= fromDate && x.NgayNhap <= toDateInclusive)
+                .OrderByDescending(x => x.NgayNhap)
+                .Select(x => new
+                {
+                    x.MaPN,
+                    NgayNhap = x.NgayNhap.ToString("dd/MM/yyyy HH:mm"),
+                    x.MaNV,
+                    TongTien = x.TongTien.ToString("N0") + " đ",
+                    GhiChu = string.IsNullOrWhiteSpace(x.GhiChu) ? "-" : x.GhiChu
+                })
+                .ToList();
+
+            return BuildGridReportView(
+                "Báo cáo nhập kho",
+                "Danh sách phiếu nhập trong khoảng thời gian đã chọn",
+                stockIns);
+        }
+
+        private Control BuildInventoryReportView()
+        {
+            var products = _productService.GetAll()
+                .Where(x => x.TrangThai)
+                .OrderBy(x => x.SoLuongTon)
+                .Select(x => new
+                {
+                    x.MaSP,
+                    x.TenSP,
+                    x.MaVach,
+                    x.SoLuongTon,
+                    GiaBan = x.GiaBan.ToString("N0") + " đ",
+                    HanSuDung = x.HanSuDung.HasValue ? x.HanSuDung.Value.ToString("dd/MM/yyyy") : "-",
+                    TrangThai = x.TrangThai ? "Đang bán" : "Ngừng bán",
+                    MucDo = x.SoLuongTon <= 5
+                        ? "Cần nhập gấp"
+                        : x.SoLuongTon <= 10
+                            ? "Sắp hết"
+                            : "Ổn định"
+                })
+                .ToList();
+
+            return BuildGridReportView(
+                "Báo cáo tồn kho",
+                "Tồn kho hiện tại của các sản phẩm đang kinh doanh",
+                products);
+        }
+
+        private Control BuildGridReportView(string title, string subtitle, object dataSource)
+        {
+            Panel wrapper = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White
+            };
+
+            Label lblViewTitle = new Label
+            {
+                Text = title,
+                Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(22, 32, 72),
+                AutoSize = true,
+                Location = new Point(18, 16)
+            };
+
+            Label lblViewSubtitle = new Label
+            {
+                Text = subtitle,
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.Gray,
+                AutoSize = true,
+                Location = new Point(18, 42)
+            };
+
+            DataGridView grid = new DataGridView
+            {
+                Location = new Point(18, 74),
+                Size = new Size(Math.Max(200, pnlReportViewer.Width - 36), Math.Max(120, pnlReportViewer.Height - 92)),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                ReadOnly = true,
+                MultiSelect = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                AutoGenerateColumns = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                RowHeadersVisible = false,
+                DataSource = dataSource
+            };
+
+            wrapper.Controls.Add(lblViewTitle);
+            wrapper.Controls.Add(lblViewSubtitle);
+            wrapper.Controls.Add(grid);
+
+            return wrapper;
+        }
+
+        private string GetInvoiceStatusLabel(string status)
+        {
+            if (string.Equals(status, "Paid", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Đã thanh toán";
+            }
+
+            if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Đã hủy";
+            }
+
+            return string.IsNullOrWhiteSpace(status) ? "-" : status;
         }
     }
 }

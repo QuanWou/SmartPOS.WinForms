@@ -98,6 +98,16 @@ namespace SmartPOS.WinForms.BLL.Services
 
             try
             {
+                UserDTO currentUser = _userRepository.GetById(user.MaNV);
+                if (currentUser == null)
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = "Người dùng không tồn tại."
+                    };
+                }
+
                 user.TenNV = user.TenNV.Trim();
                 user.TaiKhoan = user.TaiKhoan.Trim();
                 user.SoDienThoai = string.IsNullOrWhiteSpace(user.SoDienThoai) ? null : user.SoDienThoai.Trim();
@@ -112,7 +122,11 @@ namespace SmartPOS.WinForms.BLL.Services
                     };
                 }
 
-                if (!string.IsNullOrWhiteSpace(user.MatKhauHash))
+                if (string.IsNullOrWhiteSpace(user.MatKhauHash))
+                {
+                    user.MatKhauHash = currentUser.MatKhauHash;
+                }
+                else
                 {
                     user.MatKhauHash = PasswordHelper.ToSha256(user.MatKhauHash);
                 }

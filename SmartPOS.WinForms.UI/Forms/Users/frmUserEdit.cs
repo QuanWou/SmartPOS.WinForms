@@ -248,11 +248,6 @@ namespace SmartPOS.WinForms.UI.Forms.Users
                         NgayTao = _editingUser.NgayTao
                     };
 
-                    if (string.IsNullOrWhiteSpace(txtMatKhau.Text))
-                    {
-                        user.MatKhauHash = _editingUser.MatKhauHash;
-                    }
-
                     result = _userService.Update(user);
                 }
                 else

@@ -1,5 +1,6 @@
 ﻿using SmartPOS.WinForms.UI.UserControls.Dashboard;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -7,6 +8,11 @@ using System.Windows.Forms;
 using System.Linq;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
+using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Forms.Main;
+using SmartPOS.WinForms.UI.Forms.Products;
+using SmartPOS.WinForms.UI.Forms.Stock;
 namespace SmartPOS.WinForms.UI.Forms.Dashboard
 {
     public class frmDashboard : Form
@@ -22,19 +28,26 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         private UcStatCard cardSubscribers;
         private UcStatCard cardEarnings;
         private readonly IProductService _productService;
+        private readonly IProductLotService _productLotService;
         private readonly ICategoryService _categoryService;
         private readonly IInvoiceService _invoiceService;
+        private Panel pnlLowStockAlert;
+        private Label lblLowStockAlert;
+        private Timer tmrLowStockAlert;
+        private bool _alertBlinkOn;
+        private Panel pnlExpiryAlert;
+        private Label lblExpiryAlert;
+        private Timer tmrExpiryAlertAlert;
+        private bool _expiryAlertBlinkOn;
         // ── Charts row ────────────────────────────────────────────────────
         private TableLayoutPanel tlpCharts;
-        private UcCompaniesChart chartCompanies;
         private UcRevenueChart chartRevenue;
-        private UcTopPlansChart chartTopPlans;
+        private UcTopProductsChart chartTopProducts;
 
-        // ── Lists row ─────────────────────────────────────────────────────
+        // ── Insight lists ─────────────────────────────────────────────────
         private TableLayoutPanel tlpLists;
-        private UcRecentTransactions listTransactions;
-        private UcRecentlyRegistered listRegistered;
-        private UcRecentPlanExpired listExpired;
+        private UcInsightListPanel listLowStock;
+        private UcInsightListPanel listExpiry;
 
         // ── Design tokens ─────────────────────────────────────────────────
         private static readonly Color BG = Color.FromArgb(248, 249, 251);
@@ -51,6 +64,7 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         public frmDashboard()
         {
             _productService = new ProductService();
+            _productLotService = new ProductLotService();
             _categoryService = new CategoryService();
             _invoiceService = new InvoiceService();
 
@@ -83,6 +97,8 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
             pnlScrollWrapper.Controls.Add(pnlMainContent);
 
             BuildHeaderBar();
+            BuildLowStockAlert();
+            BuildExpiryAlert();
             BuildStatCards();
             BuildChartsRow();
             BuildListsRow();
@@ -105,15 +121,55 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 var products = _productService.GetAll().ToList();
                 var categories = _categoryService.GetAll().ToList();
                 var invoices = _invoiceService.GetAll().ToList();
+                var paidInvoices = invoices
+                    .Where(x => string.Equals(x.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
 
                 int totalProducts = products.Count;
                 int totalCategories = categories.Count;
+                List<ProductDTO> lowStockProducts = products
+                    .Where(x =>
+                        x.TrangThai &&
+                        x.SoLuongTon < 5 &&
+                        (!x.HanSuDung.HasValue || x.HanSuDung.Value.Date >= DateTime.Today))
+                    .OrderBy(x => x.SoLuongTon)
+                    .ThenBy(x => x.TenSP)
+                    .ToList();
+                int lowStockCount = lowStockProducts.Count;
+                List<ProductLotDTO> expiringSoonLots = _productLotService.GetExpiringLots(7)
+                    .Where(x => x.TrangThaiSanPham)
+                    .OrderBy(x => x.HanSuDung)
+                    .ThenBy(x => x.NgayNhap)
+                    .ToList();
 
                 DateTime today = DateTime.Today;
-                var todayInvoices = invoices
-                    .Where(x =>
-                        x.NgayLap.Date == today &&
-                        string.Equals(x.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase))
+                DateTime topProductsFrom = today.AddDays(-29);
+                Dictionary<int, ProductDTO> productLookup = products
+                    .GroupBy(x => x.MaSP)
+                    .ToDictionary(x => x.Key, x => x.First());
+
+                List<DashboardTopProductItem> topProducts = paidInvoices
+                    .Where(x => x.NgayLap.Date >= topProductsFrom && x.NgayLap.Date <= today)
+                    .SelectMany(x => _invoiceService.GetDetailsByInvoiceId(x.MaHD))
+                    .GroupBy(x => x.MaSP)
+                    .Select(x =>
+                    {
+                        ProductDTO product;
+                        productLookup.TryGetValue(x.Key, out product);
+                        return new DashboardTopProductItem
+                        {
+                            ProductName = product != null ? product.TenSP : "SP #" + x.Key,
+                            QuantitySold = x.Sum(y => y.SoLuong),
+                            Revenue = x.Sum(y => y.ThanhTien)
+                        };
+                    })
+                    .OrderByDescending(x => x.QuantitySold)
+                    .ThenByDescending(x => x.Revenue)
+                    .ThenBy(x => x.ProductName)
+                    .Take(5)
+                    .ToList();
+                var todayInvoices = paidInvoices
+                    .Where(x => x.NgayLap.Date == today)
                     .ToList();
 
                 int totalTodayInvoices = todayInvoices.Count;
@@ -138,6 +194,12 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 cardEarnings.Title = "Doanh thu hôm nay";
                 cardEarnings.Change = "+0.00%";
                 cardEarnings.IsPositive = true;
+
+                UpdateLowStockAlert(lowStockCount);
+                UpdateExpiryAlert(expiringSoonLots);
+                LoadRevenueChartData(paidInvoices);
+                LoadTopProductsChartData(topProducts);
+                UpdateInsightLists(lowStockProducts, expiringSoonLots);
             }
             catch
             {
@@ -145,6 +207,11 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 cardActive.Value = "0";
                 cardSubscribers.Value = "0";
                 cardEarnings.Value = "0 đ";
+                UpdateLowStockAlert(0);
+                UpdateExpiryAlert(new List<ProductLotDTO>());
+                chartRevenue?.SetData(new List<RevenueChartItemResponse>(), "0 đ", "+0% so với 7 ngày trước");
+                chartTopProducts?.SetData(new List<DashboardTopProductItem>(), "30 ngày gần nhất");
+                UpdateInsightLists(new List<ProductDTO>(), new List<ProductLotDTO>());
             }
         }
         // ─────────────────────────────────────────────────────────────────
@@ -166,13 +233,13 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
 
                 using var hFont = new Font("Segoe UI Semibold", 14F, FontStyle.Bold);
                 using var sBr = new SolidBrush(TEXT_PRIMARY);
-                g.DrawString("Dashboard", hFont, sBr, 0, 2);
+                g.DrawString("Tổng quan", hFont, sBr, 0, 2);
 
                 using var subFont = new Font("Segoe UI", 8.5F);
                 using var subBr = new SolidBrush(TEXT_MUTED);
                 g.DrawString("Tổng quan bán hàng, tồn kho và vận hành cửa hàng", subFont, subBr, 0, 26);
 
-                const string dateText = "Today Overview";
+                string dateText = "Hôm nay - " + DateTime.Today.ToString("dd/MM/yyyy");
                 using var badgeFont = new Font("Segoe UI", 8F);
                 var sz = g.MeasureString(dateText, badgeFont);
                 int bW = (int)sz.Width + 28;
@@ -196,6 +263,86 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
 
             pnl.Resize += (s, e) => pnl.Invalidate();
             pnlMainContent.Controls.Add(pnl);
+        }
+
+        private void BuildLowStockAlert()
+        {
+            pnlLowStockAlert = new Panel
+            {
+                Height = 54,
+                BackColor = Color.FromArgb(255, 246, 220),
+                BorderStyle = BorderStyle.FixedSingle,
+                Visible = false,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 0, 18)
+            };
+
+            lblLowStockAlert = new Label
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(18, 0, 18, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(148, 88, 0)
+            };
+
+            pnlLowStockAlert.Controls.Add(lblLowStockAlert);
+            pnlLowStockAlert.Click += (s, e) => NavigateToLowStock();
+            lblLowStockAlert.Click += (s, e) => NavigateToLowStock();
+
+            tmrLowStockAlert = new Timer { Interval = 550 };
+            tmrLowStockAlert.Tick += (s, e) =>
+            {
+                if (!pnlLowStockAlert.Visible)
+                {
+                    return;
+                }
+
+                _alertBlinkOn = !_alertBlinkOn;
+                ApplyLowStockAlertStyle();
+            };
+
+            pnlMainContent.Controls.Add(pnlLowStockAlert);
+        }
+
+        private void BuildExpiryAlert()
+        {
+            pnlExpiryAlert = new Panel
+            {
+                Height = 72,
+                BackColor = Color.FromArgb(255, 237, 236),
+                BorderStyle = BorderStyle.FixedSingle,
+                Visible = false,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 0, 18)
+            };
+
+            lblExpiryAlert = new Label
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(18, 8, 18, 8),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font("Segoe UI Semibold", 9.25F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(156, 56, 56)
+            };
+
+            pnlExpiryAlert.Controls.Add(lblExpiryAlert);
+            pnlExpiryAlert.Click += (s, e) => NavigateToExpiryProducts();
+            lblExpiryAlert.Click += (s, e) => NavigateToExpiryProducts();
+
+            tmrExpiryAlertAlert = new Timer { Interval = 650 };
+            tmrExpiryAlertAlert.Tick += (s, e) =>
+            {
+                if (!pnlExpiryAlert.Visible)
+                {
+                    return;
+                }
+
+                _expiryAlertBlinkOn = !_expiryAlertBlinkOn;
+                ApplyExpiryAlertStyle();
+            };
+
+            pnlMainContent.Controls.Add(pnlExpiryAlert);
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -228,51 +375,66 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         {
             tlpCharts = new TableLayoutPanel
             {
-                ColumnCount = 3,
+                ColumnCount = 2,
                 RowCount = 1,
                 BackColor = Color.Transparent,
                 Margin = new Padding(0, 0, 0, 18),
-                Height = 300
+                Height = 320
             };
+            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58F));
+            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42F));
             tlpCharts.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28F));
-            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44F));
-            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28F));
 
-            chartCompanies = new UcCompaniesChart { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
-            chartRevenue = new UcRevenueChart { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
-            chartTopPlans = new UcTopPlansChart { Dock = DockStyle.Fill };
+            chartRevenue = new UcRevenueChart
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 12, 0)
+            };
 
-            tlpCharts.Controls.Add(chartCompanies, 0, 0);
-            tlpCharts.Controls.Add(chartRevenue, 1, 0);
-            tlpCharts.Controls.Add(chartTopPlans, 2, 0);
+            chartTopProducts = new UcTopProductsChart
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0)
+            };
+
+            tlpCharts.Controls.Add(chartRevenue, 0, 0);
+            tlpCharts.Controls.Add(chartTopProducts, 1, 0);
 
             pnlMainContent.Controls.Add(tlpCharts);
         }
 
-        // ─────────────────────────────────────────────────────────────────
         private void BuildListsRow()
         {
             tlpLists = new TableLayoutPanel
             {
-                ColumnCount = 3,
+                ColumnCount = 2,
                 RowCount = 1,
                 BackColor = Color.Transparent,
-                Margin = new Padding(0),
+                Margin = new Padding(0, 0, 0, 18),
                 Height = 260
             };
+            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             tlpLists.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
 
-            listTransactions = new UcRecentTransactions { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
-            listRegistered = new UcRecentlyRegistered { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
-            listExpired = new UcRecentPlanExpired { Dock = DockStyle.Fill };
+            listLowStock = new UcInsightListPanel
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 12, 0),
+                Tone = DashboardListTone.Warning
+            };
+            listLowStock.Click += (s, e) => NavigateToLowStock();
 
-            tlpLists.Controls.Add(listTransactions, 0, 0);
-            tlpLists.Controls.Add(listRegistered, 1, 0);
-            tlpLists.Controls.Add(listExpired, 2, 0);
+            listExpiry = new UcInsightListPanel
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0),
+                Tone = DashboardListTone.Danger
+            };
+            listExpiry.Click += (s, e) => NavigateToExpiryProducts();
+
+            tlpLists.Controls.Add(listLowStock, 0, 0);
+            tlpLists.Controls.Add(listExpiry, 1, 0);
 
             pnlMainContent.Controls.Add(tlpLists);
         }
@@ -314,6 +476,18 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 y += 54 + GAP;
             }
 
+            if (pnlLowStockAlert != null && pnlLowStockAlert.Visible)
+            {
+                pnlLowStockAlert.SetBounds(0, y, cw, 54);
+                y += 54 + GAP;
+            }
+
+            if (pnlExpiryAlert != null && pnlExpiryAlert.Visible)
+            {
+                pnlExpiryAlert.SetBounds(0, y, cw, 72);
+                y += 72 + GAP;
+            }
+
             // Stat cards
             if (flpCards != null)
             {
@@ -339,41 +513,13 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
             // Charts row
             if (tlpCharts != null)
             {
-                if (narrow)
-                {
-                    tlpCharts.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpCharts.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpCharts.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 0F);
-                    chartTopPlans.Visible = false;
-                }
-                else
-                {
-                    tlpCharts.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 28F);
-                    tlpCharts.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 44F);
-                    tlpCharts.ColumnStyles[2] = new ColumnStyle(SizeType.Percent, 28F);
-                    chartTopPlans.Visible = true;
-                }
-                tlpCharts.SetBounds(0, y, cw, 300);
-                y += 300 + GAP;
+                tlpCharts.SetBounds(0, y, cw, 320);
+                y += 320 + GAP;
             }
 
-            // Lists row
+            // Insight lists
             if (tlpLists != null)
             {
-                if (narrow)
-                {
-                    tlpLists.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpLists.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpLists.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 0F);
-                    listExpired.Visible = false;
-                }
-                else
-                {
-                    tlpLists.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 33.33F);
-                    tlpLists.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 33.33F);
-                    tlpLists.ColumnStyles[2] = new ColumnStyle(SizeType.Percent, 33.33F);
-                    listExpired.Visible = true;
-                }
                 tlpLists.SetBounds(0, y, cw, 260);
                 y += 260 + GAP;
             }
@@ -400,6 +546,232 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
             };
         }
 
+        private void UpdateLowStockAlert(int lowStockCount)
+        {
+            if (pnlLowStockAlert == null || lblLowStockAlert == null)
+            {
+                return;
+            }
+
+            bool hasLowStock = lowStockCount > 0;
+            pnlLowStockAlert.Visible = hasLowStock;
+
+            if (!hasLowStock)
+            {
+                tmrLowStockAlert?.Stop();
+                return;
+            }
+
+            lblLowStockAlert.Text = string.Format(
+                "{0} sản phẩm sắp hết hàng. Bấm để mở danh sách cần nhập thêm.",
+                lowStockCount);
+
+            _alertBlinkOn = true;
+            ApplyLowStockAlertStyle();
+            tmrLowStockAlert?.Start();
+        }
+
+        private void UpdateExpiryAlert(List<ProductLotDTO> expiringSoonLots)
+        {
+            if (pnlExpiryAlert == null || lblExpiryAlert == null)
+            {
+                return;
+            }
+
+            bool hasExpiringSoon = expiringSoonLots != null && expiringSoonLots.Count > 0;
+            pnlExpiryAlert.Visible = hasExpiringSoon;
+
+            if (!hasExpiringSoon)
+            {
+                tmrExpiryAlertAlert?.Stop();
+                return;
+            }
+
+            lblExpiryAlert.Text = BuildExpiryAlertText(expiringSoonLots);
+
+            _expiryAlertBlinkOn = true;
+            ApplyExpiryAlertStyle();
+            tmrExpiryAlertAlert?.Start();
+        }
+
+        private void ApplyLowStockAlertStyle()
+        {
+            if (pnlLowStockAlert == null || lblLowStockAlert == null)
+            {
+                return;
+            }
+
+            pnlLowStockAlert.BackColor = _alertBlinkOn
+                ? Color.FromArgb(255, 246, 220)
+                : Color.FromArgb(255, 238, 198);
+            lblLowStockAlert.ForeColor = Color.FromArgb(148, 88, 0);
+        }
+
+        private void ApplyExpiryAlertStyle()
+        {
+            if (pnlExpiryAlert == null || lblExpiryAlert == null)
+            {
+                return;
+            }
+
+            pnlExpiryAlert.BackColor = _expiryAlertBlinkOn
+                ? Color.FromArgb(255, 237, 236)
+                : Color.FromArgb(255, 226, 224);
+            lblExpiryAlert.ForeColor = Color.FromArgb(156, 56, 56);
+        }
+
+        private string BuildExpiryAlertText(List<ProductLotDTO> expiringSoonLots)
+        {
+            List<string> highlightedLots = expiringSoonLots
+                .Take(3)
+                .Select(x => x.TenSP + " - lô " + x.NgayNhap.ToString("dd/MM") + " (HSD " + x.HanSuDung.Value.ToString("dd/MM") + ")")
+                .ToList();
+
+            string suffix = expiringSoonLots.Count > 3
+                ? " và " + (expiringSoonLots.Count - 3) + " lô khác."
+                : ".";
+
+            return expiringSoonLots.Count +
+                " lô hàng sẽ hết hạn trong 7 ngày: " +
+                string.Join(", ", highlightedLots) +
+                suffix +
+                " Bấm để mở danh sách chi tiết.";
+        }
+
+        private void LoadRevenueChartData(List<InvoiceDTO> paidInvoices)
+        {
+            if (chartRevenue == null)
+            {
+                return;
+            }
+
+            DateTime today = DateTime.Today;
+            List<RevenueChartItemResponse> revenueData = Enumerable.Range(0, 7)
+                .Select(index =>
+                {
+                    DateTime day = today.AddDays(index - 6);
+                    decimal revenue = paidInvoices
+                        .Where(x => x.NgayLap.Date == day)
+                        .Sum(x => x.TongTien);
+
+                    return new RevenueChartItemResponse
+                    {
+                        Ngay = day,
+                        DoanhThu = revenue
+                    };
+                })
+                .ToList();
+
+            decimal currentTotal = revenueData.Sum(x => x.DoanhThu);
+
+            DateTime previousStart = today.AddDays(-13);
+            DateTime previousEnd = today.AddDays(-7);
+            decimal previousTotal = paidInvoices
+                .Where(x => x.NgayLap.Date >= previousStart && x.NgayLap.Date <= previousEnd)
+                .Sum(x => x.TongTien);
+
+            chartRevenue.SetData(
+                revenueData,
+                currentTotal.ToString("N0") + " đ",
+                BuildRevenueBadgeText(currentTotal, previousTotal));
+        }
+
+        private void LoadTopProductsChartData(List<DashboardTopProductItem> topProducts)
+        {
+            if (chartTopProducts == null)
+            {
+                return;
+            }
+
+            chartTopProducts.SetData(topProducts, "30 ngày gần nhất");
+        }
+
+        private void UpdateInsightLists(
+            List<ProductDTO> lowStockProducts,
+            List<ProductLotDTO> expiringSoonLots)
+        {
+            listLowStock?.SetData(
+                "Sắp hết hàng",
+                "5 mặt hàng tồn dưới 5 đơn vị",
+                BuildLowStockInsightItems(lowStockProducts),
+                "Hiện chưa có mặt hàng sắp hết.");
+
+            listExpiry?.SetData(
+                "Sắp hết hạn 7 ngày",
+                "Ưu tiên bán trước các lô gần đến hạn",
+                BuildExpiryInsightItems(expiringSoonLots),
+                "Hiện chưa có lô hàng sắp hết hạn.");
+        }
+
+        private IEnumerable<DashboardInsightItem> BuildLowStockInsightItems(
+            IEnumerable<ProductDTO> lowStockProducts)
+        {
+            return (lowStockProducts ?? Enumerable.Empty<ProductDTO>())
+                .Take(5)
+                .Select(x => new DashboardInsightItem
+                {
+                    Title = x.TenSP,
+                    Subtitle = "Tồn khả dụng thấp, nên nhập thêm",
+                    BadgeText = "Còn " + x.SoLuongTon
+                })
+                .ToList();
+        }
+
+        private IEnumerable<DashboardInsightItem> BuildExpiryInsightItems(
+            IEnumerable<ProductLotDTO> expiringSoonLots)
+        {
+            return (expiringSoonLots ?? Enumerable.Empty<ProductLotDTO>())
+                .Take(5)
+                .Select(x => new DashboardInsightItem
+                {
+                    Title = x.TenSP,
+                    Subtitle = "Lô " + x.NgayNhap.ToString("dd/MM") + " - còn " + x.SoLuongTonLo + " đơn vị",
+                    BadgeText = x.HanSuDung.HasValue
+                        ? "HSD " + x.HanSuDung.Value.ToString("dd/MM")
+                        : "Chưa rõ HSD"
+                })
+                .ToList();
+        }
+
+        private string BuildRevenueBadgeText(decimal currentTotal, decimal previousTotal)
+        {
+            if (previousTotal <= 0)
+            {
+                return currentTotal > 0
+                    ? "+100% so với 7 ngày trước"
+                    : "+0% so với 7 ngày trước";
+            }
+
+            decimal change = ((currentTotal - previousTotal) / previousTotal) * 100m;
+            string sign = change >= 0 ? "+" : string.Empty;
+            return sign + change.ToString("0.#") + "% so với 7 ngày trước";
+        }
+
+        private void NavigateToLowStock()
+        {
+            frmMain mainForm = GetHostMainForm();
+            if (mainForm != null)
+            {
+                mainForm.NavigateToPage(new frmLowStock());
+            }
+        }
+
+        private void NavigateToExpiryProducts()
+        {
+            frmMain mainForm = GetHostMainForm();
+            if (mainForm != null)
+            {
+                mainForm.NavigateToPage(new frmExpiredProducts());
+            }
+        }
+
+        private frmMain GetHostMainForm()
+        {
+            return TopLevelControl as frmMain
+                ?? Parent?.FindForm() as frmMain
+                ?? Application.OpenForms.OfType<frmMain>().FirstOrDefault();
+        }
+
         private static GraphicsPath RoundedRect(Rectangle r, int radius)
         {
             int d = radius * 2;
@@ -416,6 +788,18 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         {
             if (disposing)
             {
+                if (tmrLowStockAlert != null)
+                {
+                    tmrLowStockAlert.Stop();
+                    tmrLowStockAlert.Dispose();
+                }
+
+                if (tmrExpiryAlertAlert != null)
+                {
+                    tmrExpiryAlertAlert.Stop();
+                    tmrExpiryAlertAlert.Dispose();
+                }
+
                 FONT_HEAD?.Dispose();
                 FONT_SUB?.Dispose();
                 FONT_BADGE?.Dispose();

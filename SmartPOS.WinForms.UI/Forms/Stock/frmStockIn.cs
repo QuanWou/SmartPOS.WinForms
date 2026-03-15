@@ -282,6 +282,14 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             dgvStockInDetails.Columns.Add(new DataGridViewTextBoxColumn
             {
+                Name = "LineId",
+                HeaderText = "LineId",
+                DataPropertyName = "LineId",
+                Visible = false
+            });
+
+            dgvStockInDetails.Columns.Add(new DataGridViewTextBoxColumn
+            {
                 Name = "MaSP",
                 HeaderText = "Mã SP",
                 DataPropertyName = "MaSP",
@@ -315,10 +323,18 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             dgvStockInDetails.Columns.Add(new DataGridViewTextBoxColumn
             {
+                Name = "HanSuDung",
+                HeaderText = "HSD",
+                DataPropertyName = "HanSuDung",
+                Width = 90
+            });
+
+            dgvStockInDetails.Columns.Add(new DataGridViewTextBoxColumn
+            {
                 Name = "ThanhTien",
                 HeaderText = "Thành tiền",
                 DataPropertyName = "ThanhTien",
-                Width = 110,
+                Width = 100,
                 DefaultCellStyle = new DataGridViewCellStyle { Format = "N0" }
             });
 
@@ -410,10 +426,12 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
                 return new
                 {
+                    LineId = x.LineId,
                     x.MaSP,
                     TenSP = product != null ? product.TenSP : string.Empty,
                     x.SoLuong,
                     x.GiaNhapLucNhap,
+                    HanSuDung = x.HanSuDung.HasValue ? x.HanSuDung.Value.ToString("dd/MM/yyyy") : "-",
                     x.ThanhTien
                 };
             }).ToList();
@@ -511,15 +529,45 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 return;
             }
 
-            StockInDetailDTO existing = _stockInItems.FirstOrDefault(x => x.MaSP == maSP);
+            string hanSuDungText = Prompt.ShowDialog(
+                "Nhập hạn sử dụng (dd/MM/yyyy, bỏ trống nếu không có):",
+                "Thêm vào phiếu nhập",
+                product.HanSuDung.HasValue ? product.HanSuDung.Value.ToString("dd/MM/yyyy") : string.Empty);
+
+            DateTime? hanSuDung = null;
+            if (!string.IsNullOrWhiteSpace(hanSuDungText))
+            {
+                DateTime parsedDate;
+                string[] supportedFormats = { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd" };
+
+                if (!DateTime.TryParseExact(
+                    hanSuDungText.Trim(),
+                    supportedFormats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out parsedDate))
+                {
+                    MessageBox.Show("Hạn sử dụng không hợp lệ.", "Thông báo");
+                    return;
+                }
+
+                hanSuDung = parsedDate.Date;
+            }
+
+            StockInDetailDTO existing = _stockInItems.FirstOrDefault(x =>
+                x.MaSP == maSP &&
+                x.GiaNhapLucNhap == giaNhap &&
+                x.HanSuDung == hanSuDung);
             if (existing == null)
             {
                 _stockInItems.Add(new StockInDetailDTO
                 {
+                    LineId = Guid.NewGuid(),
                     MaSP = maSP,
                     SoLuong = soLuong,
                     GiaNhapLucNhap = giaNhap,
-                    ThanhTien = soLuong * giaNhap
+                    ThanhTien = soLuong * giaNhap,
+                    HanSuDung = hanSuDung
                 });
             }
             else
@@ -527,6 +575,10 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 existing.SoLuong += soLuong;
                 existing.GiaNhapLucNhap = giaNhap;
                 existing.ThanhTien = existing.SoLuong * existing.GiaNhapLucNhap;
+                if (hanSuDung.HasValue)
+                {
+                    existing.HanSuDung = hanSuDung;
+                }
             }
 
             RefreshStockInDetailsView();
@@ -539,19 +591,19 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 return;
             }
 
-            object cellValue = dgvStockInDetails.CurrentRow.Cells["MaSP"].Value;
+            object cellValue = dgvStockInDetails.CurrentRow.Cells["LineId"].Value;
             if (cellValue == null)
             {
                 return;
             }
 
-            int maSP;
-            if (!int.TryParse(cellValue.ToString(), out maSP))
+            Guid lineId;
+            if (!Guid.TryParse(cellValue.ToString(), out lineId))
             {
                 return;
             }
 
-            StockInDetailDTO item = _stockInItems.FirstOrDefault(x => x.MaSP == maSP);
+            StockInDetailDTO item = _stockInItems.FirstOrDefault(x => x.LineId == lineId);
             if (item == null)
             {
                 return;
@@ -593,7 +645,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                     MaSP = x.MaSP,
                     SoLuong = x.SoLuong,
                     GiaNhapLucNhap = x.GiaNhapLucNhap,
-                    ThanhTien = x.ThanhTien
+                    ThanhTien = x.ThanhTien,
+                    HanSuDung = x.HanSuDung
                 }).ToList()
             };
 

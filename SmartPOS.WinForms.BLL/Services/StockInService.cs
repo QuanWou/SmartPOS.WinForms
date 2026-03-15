@@ -158,6 +158,15 @@ namespace SmartPOS.WinForms.BLL.Services
                         Message = "Giá nhập không hợp lệ."
                     };
                 }
+
+                if (item.HanSuDung.HasValue && item.HanSuDung.Value.Date < DateTime.Today)
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = "Hạn sử dụng của lô nhập phải từ hôm nay trở đi."
+                    };
+                }
             }
 
             return new OperationResult

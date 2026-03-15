@@ -41,7 +41,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
     <Compile Include="Config\AppSettings.cs" />
     <Compile Include="Constants\AppConstants.cs" />
     <Compile Include="Constants\MessageConstants.cs" />

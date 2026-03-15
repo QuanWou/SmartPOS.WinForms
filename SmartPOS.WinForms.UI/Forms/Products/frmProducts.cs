@@ -246,7 +246,15 @@ namespace SmartPOS.WinForms.UI.Forms.Products
                 Name = "TenLoai",
                 HeaderText = "Danh mục",
                 DataPropertyName = "TenLoai",
-                Width = 140
+                Width = 120
+            });
+
+            dgvProducts.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "HanSuDungText",
+                HeaderText = "Hạn sử dụng",
+                DataPropertyName = "HanSuDungText",
+                Width = 110
             });
 
             dgvProducts.Columns.Add(new DataGridViewTextBoxColumn
@@ -401,6 +409,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
                 p.GiaBan,
                 p.SoLuongTon,
                 TenLoai = GetCategoryName(p.MaLoai),
+                HanSuDungText = p.HanSuDung.HasValue ? p.HanSuDung.Value.ToString("dd/MM/yyyy") : "-",
                 TrangThaiText = p.TrangThai ? "Đang bán" : "Ngừng bán"
             }).ToList();
 

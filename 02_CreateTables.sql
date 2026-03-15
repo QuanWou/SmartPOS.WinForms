@@ -29,6 +29,7 @@ CREATE TABLE Products
     MaLoai INT NOT NULL,
     HinhAnh NVARCHAR(255) NULL,
     MoTa NVARCHAR(500) NULL,
+    HanSuDung DATE NULL,
     TrangThai BIT NOT NULL DEFAULT 1,
     NgayTao DATETIME NOT NULL DEFAULT GETDATE(),
     NgayCapNhat DATETIME NULL,
@@ -125,6 +126,7 @@ CREATE TABLE StockInDetails
     MaSP INT NOT NULL,
     SoLuong INT NOT NULL,
     GiaNhapLucNhap DECIMAL(18,2) NOT NULL,
+    HanSuDung DATE NULL,
     ThanhTien DECIMAL(18,2) NOT NULL,
 
     CONSTRAINT FK_StockInDetails_StockIns FOREIGN KEY (MaPN) REFERENCES StockIns(MaPN),
@@ -136,7 +138,50 @@ CREATE TABLE StockInDetails
 GO
 
 -- =========================
--- 8. CashDrawerLogs
+-- 8. ProductLots
+-- =========================
+CREATE TABLE ProductLots
+(
+    MaLo INT IDENTITY(1,1) PRIMARY KEY,
+    MaPN INT NULL,
+    MaCTPN INT NULL,
+    MaSP INT NOT NULL,
+    NgayNhap DATETIME NOT NULL DEFAULT GETDATE(),
+    HanSuDung DATE NULL,
+    SoLuongNhap INT NOT NULL,
+    SoLuongTonLo INT NOT NULL,
+    GiaNhapLucNhap DECIMAL(18,2) NOT NULL,
+    GhiChu NVARCHAR(255) NULL,
+
+    CONSTRAINT FK_ProductLots_StockIns FOREIGN KEY (MaPN) REFERENCES StockIns(MaPN),
+    CONSTRAINT FK_ProductLots_StockInDetails FOREIGN KEY (MaCTPN) REFERENCES StockInDetails(MaCTPN),
+    CONSTRAINT FK_ProductLots_Products FOREIGN KEY (MaSP) REFERENCES Products(MaSP),
+    CONSTRAINT CK_ProductLots_SoLuongNhap CHECK (SoLuongNhap > 0),
+    CONSTRAINT CK_ProductLots_SoLuongTonLo CHECK (SoLuongTonLo >= 0),
+    CONSTRAINT CK_ProductLots_GiaNhapLucNhap CHECK (GiaNhapLucNhap >= 0)
+);
+GO
+
+-- =========================
+-- 9. InvoiceLotAllocations
+-- =========================
+CREATE TABLE InvoiceLotAllocations
+(
+    MaPhanBo INT IDENTITY(1,1) PRIMARY KEY,
+    MaHD INT NOT NULL,
+    MaCTHD INT NOT NULL,
+    MaLo INT NOT NULL,
+    SoLuong INT NOT NULL,
+
+    CONSTRAINT FK_InvoiceLotAllocations_Invoices FOREIGN KEY (MaHD) REFERENCES Invoices(MaHD),
+    CONSTRAINT FK_InvoiceLotAllocations_InvoiceDetails FOREIGN KEY (MaCTHD) REFERENCES InvoiceDetails(MaCTHD),
+    CONSTRAINT FK_InvoiceLotAllocations_ProductLots FOREIGN KEY (MaLo) REFERENCES ProductLots(MaLo),
+    CONSTRAINT CK_InvoiceLotAllocations_SoLuong CHECK (SoLuong > 0)
+);
+GO
+
+-- =========================
+-- 10. CashDrawerLogs
 -- =========================
 CREATE TABLE CashDrawerLogs
 (

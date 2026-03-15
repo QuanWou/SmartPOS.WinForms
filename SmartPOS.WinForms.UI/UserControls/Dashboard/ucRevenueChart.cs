@@ -3,6 +3,10 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Windows.Forms;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using SmartPOS.WinForms.DTO.Responses;
 
 namespace SmartPOS.WinForms.UI.UserControls.Dashboard
 {
@@ -106,19 +110,37 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
     // ═══════════════════════════════════════════════════════
     public class UcRevenueChart : UserControl
     {
-        private readonly string[] _months =
-            { "T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12" };
-        private readonly int[] _values =
-            { 45000,38000,52000,41000,68000,55000,72000,60000,65000,48000,20000,58000 };
-
-        private const int MaxValue = 80000;
+        private List<RevenueChartItemResponse> _items;
+        private string _totalLabel = "0 đ";
+        private string _badgeLabel = "+0% so với 7 ngày trước";
+        private decimal _maxValue = 100000m;
 
         public UcRevenueChart()
         {
             DoubleBuffered = true;
             BackColor = Palette.BgPage;
+            _items = CreateFallbackData();
             Resize += (s, e) => Invalidate();
             Paint += OnPaint;
+        }
+
+        public void SetData(
+            IEnumerable<RevenueChartItemResponse> items,
+            string totalLabel,
+            string badgeLabel)
+        {
+            List<RevenueChartItemResponse> normalized = items == null
+                ? new List<RevenueChartItemResponse>()
+                : items.OrderBy(x => x.Ngay).ToList();
+
+            _items = normalized.Count == 0 ? CreateFallbackData() : normalized;
+            _totalLabel = string.IsNullOrWhiteSpace(totalLabel) ? "0 đ" : totalLabel;
+            _badgeLabel = string.IsNullOrWhiteSpace(badgeLabel)
+                ? "+0% so với 7 ngày trước"
+                : badgeLabel;
+            _maxValue = NormalizeMaxValue(_items.Max(x => x.DoanhThu));
+
+            Invalidate();
         }
 
         private void OnPaint(object sender, PaintEventArgs e)
@@ -136,14 +158,15 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             using var fSub = new Font("Segoe UI", 8.5f, FontStyle.Regular);
             using var bNavy = new SolidBrush(Palette.Navy);
             using var bMid = new SolidBrush(Palette.NavyMid);
-            using var bPos = new SolidBrush(Palette.PositiveText);
+            bool positive = !_badgeLabel.StartsWith("-");
+            Color badgeTextColor = positive ? Palette.PositiveText : Color.FromArgb(170, 70, 70);
+            Color badgeBackColor = positive ? Palette.PositiveBg : Color.FromArgb(24, 170, 70, 70);
 
             g.DrawString("Doanh thu", fLabel, bMid, 18f, 14f);
-            g.DrawString("45.787.000 \u0111", fValue, bNavy, 18f, 32f);
+            g.DrawString(_totalLabel, fValue, bNavy, 18f, 32f);
 
-            // Badge: "+40% so v\u1edbi n\u0103m ngo\u00e1i" — use ASCII arrow, no emoji
-            GdiHelper.DrawBadge(g, "+40% so v\u1edbi n\u0103m ngo\u00e1i", fSub,
-                                Palette.PositiveText, Palette.PositiveBg,
+            GdiHelper.DrawBadge(g, _badgeLabel, fSub,
+                                badgeTextColor, badgeBackColor,
                                 18f, 60f);
 
             // ── Chart area ────────────────────────────────
@@ -152,47 +175,130 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             int cW = cR - cL, cH = cB - cT;
 
             // Grid lines + Y labels
-            int[] ySteps = { 80000, 60000, 40000, 20000, 0 };
+            decimal[] ySteps = GetAxisSteps();
             using var gridPen = new Pen(Palette.GridLine, 1f);
             using var fTick = new Font("Segoe UI", 6.5f);
             using var bTick = new SolidBrush(Palette.NavyLight);
 
-            foreach (int yv in ySteps)
+            foreach (decimal yv in ySteps)
             {
-                float yp = cB - (float)yv / MaxValue * cH;
+                float yp = cB - (float)(yv / _maxValue) * cH;
                 g.DrawLine(gridPen, cL, yp, cR, yp);
-                string lbl = yv == 0 ? "0" : (yv / 1000) + "K";
+                string lbl = FormatCompact(yv);
                 g.DrawString(lbl, fTick, bTick, 2f, yp - 8f);
             }
 
-            // Bars — navy gradient
-            float slotW = (float)cW / _months.Length;
-            float barW = slotW * 0.55f;
+            if (_items.Count == 1)
+            {
+                _items.Add(new RevenueChartItemResponse
+                {
+                    Ngay = _items[0].Ngay.AddDays(1),
+                    DoanhThu = _items[0].DoanhThu
+                });
+            }
+
+            float slotW = _items.Count > 1
+                ? (float)cW / (_items.Count - 1)
+                : cW;
 
             using var fMonth = new Font("Segoe UI", 6.5f);
             using var bMonth = new SolidBrush(Palette.NavyLight);
-
-            for (int i = 0; i < _months.Length; i++)
+            using var fillBrush = new LinearGradientBrush(
+                new PointF(cL, cT),
+                new PointF(cL, cB),
+                Color.FromArgb(60, Palette.AccentMid),
+                Color.FromArgb(0, Palette.AccentMid));
+            using var linePen = new Pen(Palette.AccentMid, 2.5f)
             {
-                float bx = cL + i * slotW + (slotW - barW) / 2f;
-                float bh = (float)_values[i] / MaxValue * cH;
-                float by = cB - bh;
-                if (bh < 1f) bh = 1f;
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round
+            };
+            using var pointBrush = new SolidBrush(Palette.AccentDark);
+            using var pointPen = new Pen(Color.White, 2f);
 
-                var rf = new RectangleF(bx, by, barW, bh);
-                using var grad = new LinearGradientBrush(
-                    new PointF(bx, by),
-                    new PointF(bx, cB),
-                    Palette.AccentMid,
-                    Palette.AccentLight);
-                using var barPath = GdiHelper.RoundedTop(rf, 4);
-                g.FillPath(grad, barPath);
+            PointF[] points = _items
+                .Select((x, index) => new PointF(
+                    cL + index * slotW,
+                    cB - (float)(x.DoanhThu / _maxValue) * cH))
+                .ToArray();
 
-                // Month label — centred under bar
-                var mSz = g.MeasureString(_months[i], fMonth);
-                g.DrawString(_months[i], fMonth, bMonth,
-                             bx + barW / 2f - mSz.Width / 2f, cB + 4f);
+            if (points.Length >= 2)
+            {
+                PointF[] fillPoints = new PointF[points.Length + 2];
+                fillPoints[0] = new PointF(points[0].X, cB);
+                Array.Copy(points, 0, fillPoints, 1, points.Length);
+                fillPoints[fillPoints.Length - 1] = new PointF(points[points.Length - 1].X, cB);
+
+                g.FillPolygon(fillBrush, fillPoints);
+                g.DrawLines(linePen, points);
             }
+
+            for (int i = 0; i < points.Length; i++)
+            {
+                g.FillEllipse(pointBrush, points[i].X - 4f, points[i].Y - 4f, 8f, 8f);
+                g.DrawEllipse(pointPen, points[i].X - 4f, points[i].Y - 4f, 8f, 8f);
+
+                string label = _items[i].Ngay.ToString("dd/MM", CultureInfo.InvariantCulture);
+                var mSz = g.MeasureString(label, fMonth);
+                g.DrawString(label, fMonth, bMonth,
+                             points[i].X - mSz.Width / 2f, cB + 4f);
+            }
+        }
+
+        private List<RevenueChartItemResponse> CreateFallbackData()
+        {
+            DateTime today = DateTime.Today;
+            return Enumerable.Range(0, 7)
+                .Select(index => new RevenueChartItemResponse
+                {
+                    Ngay = today.AddDays(index - 6),
+                    DoanhThu = 0
+                })
+                .ToList();
+        }
+
+        private decimal NormalizeMaxValue(decimal maxRevenue)
+        {
+            if (maxRevenue <= 0)
+            {
+                return 100000m;
+            }
+
+            decimal step = 100000m;
+            while (maxRevenue / step > 10m)
+            {
+                step *= 10m;
+            }
+
+            return Math.Ceiling(maxRevenue / step) * step;
+        }
+
+        private decimal[] GetAxisSteps()
+        {
+            return new[]
+            {
+                _maxValue,
+                _maxValue * 0.75m,
+                _maxValue * 0.5m,
+                _maxValue * 0.25m,
+                0m
+            };
+        }
+
+        private string FormatCompact(decimal value)
+        {
+            if (value >= 1000000m)
+            {
+                return (value / 1000000m).ToString("0.#", CultureInfo.InvariantCulture) + "M";
+            }
+
+            if (value >= 1000m)
+            {
+                return (value / 1000m).ToString("0.#", CultureInfo.InvariantCulture) + "K";
+            }
+
+            return value.ToString("0", CultureInfo.InvariantCulture);
         }
     }
 

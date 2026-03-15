@@ -21,3 +21,15 @@ GO
 
 CREATE INDEX IX_StockInDetails_MaPN ON StockInDetails(MaPN);
 GO
+
+CREATE INDEX IX_ProductLots_MaSP_HanSuDung ON ProductLots(MaSP, HanSuDung, NgayNhap);
+GO
+
+CREATE INDEX IX_ProductLots_MaPN ON ProductLots(MaPN);
+GO
+
+CREATE INDEX IX_InvoiceLotAllocations_MaHD ON InvoiceLotAllocations(MaHD);
+GO
+
+CREATE INDEX IX_InvoiceLotAllocations_MaLo ON InvoiceLotAllocations(MaLo);
+GO

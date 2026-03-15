@@ -28,6 +28,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         private Label lblSoLuongTon;
         private Label lblMaLoai;
         private Label lblHinhAnh;
+        private Label lblHanSuDung;
         private Label lblMoTa;
 
         private TextBox txtTenSP;
@@ -38,6 +39,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         private TextBox txtSoLuongTon;
         private ComboBox cboMaLoai;
         private TextBox txtHinhAnh;
+        private DateTimePicker dtpHanSuDung;
         private TextBox txtMoTa;
         private CheckBox chkTrangThai;
 
@@ -69,8 +71,8 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         {
             this.Text = _isEditMode ? "Cập nhật sản phẩm" : "Thêm sản phẩm";
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Size = new Size(620, 620);
-            this.MinimumSize = new Size(620, 620);
+            this.Size = new Size(620, 680);
+            this.MinimumSize = new Size(620, 680);
             this.MaximizeBox = false;
             this.BackColor = Color.FromArgb(248, 249, 251);
             this.Font = new Font("Segoe UI", 9F);
@@ -99,8 +101,14 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             lblGiaBan = new Label { Text = "Giá bán", AutoSize = true, Location = new Point(214, 195) };
             txtGiaBan = new TextBox { Location = new Point(214, 217), Size = new Size(170, 28) };
 
-            lblSoLuongTon = new Label { Text = "Số lượng tồn", AutoSize = true, Location = new Point(404, 195) };
-            txtSoLuongTon = new TextBox { Location = new Point(404, 217), Size = new Size(170, 28) };
+            lblSoLuongTon = new Label { Text = "Tồn khả dụng", AutoSize = true, Location = new Point(404, 195) };
+            txtSoLuongTon = new TextBox
+            {
+                Location = new Point(404, 217),
+                Size = new Size(170, 28),
+                ReadOnly = true,
+                BackColor = Color.WhiteSmoke
+            };
 
             lblMaLoai = new Label { Text = "Danh mục", AutoSize = true, Location = new Point(24, 255) };
             cboMaLoai = new ComboBox
@@ -113,10 +121,20 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             lblHinhAnh = new Label { Text = "Hình ảnh", AutoSize = true, Location = new Point(324, 255) };
             txtHinhAnh = new TextBox { Location = new Point(324, 277), Size = new Size(250, 28) };
 
-            lblMoTa = new Label { Text = "Mô tả", AutoSize = true, Location = new Point(24, 315) };
-            txtMoTa = new TextBox
+            lblHanSuDung = new Label { Text = "HSD gần nhất theo lô", AutoSize = true, Location = new Point(24, 315) };
+            dtpHanSuDung = new DateTimePicker
             {
                 Location = new Point(24, 337),
+                Size = new Size(250, 28),
+                Format = DateTimePickerFormat.Short,
+                ShowCheckBox = true,
+                Enabled = false
+            };
+
+            lblMoTa = new Label { Text = "Mô tả", AutoSize = true, Location = new Point(24, 375) };
+            txtMoTa = new TextBox
+            {
+                Location = new Point(24, 397),
                 Size = new Size(550, 110),
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical
@@ -126,14 +144,14 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             {
                 Text = "Đang kinh doanh",
                 AutoSize = true,
-                Location = new Point(24, 462),
+                Location = new Point(24, 522),
                 Checked = true
             };
 
             btnSave = new Button
             {
                 Text = _isEditMode ? "Cập nhật" : "Lưu",
-                Location = new Point(364, 520),
+                Location = new Point(364, 580),
                 Size = new Size(100, 36),
                 BackColor = Color.FromArgb(22, 32, 72),
                 ForeColor = Color.White,
@@ -145,7 +163,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             btnClose = new Button
             {
                 Text = "Đóng",
-                Location = new Point(474, 520),
+                Location = new Point(474, 580),
                 Size = new Size(100, 36),
                 BackColor = Color.FromArgb(230, 233, 240),
                 ForeColor = Color.Black,
@@ -171,6 +189,8 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             this.Controls.Add(cboMaLoai);
             this.Controls.Add(lblHinhAnh);
             this.Controls.Add(txtHinhAnh);
+            this.Controls.Add(lblHanSuDung);
+            this.Controls.Add(dtpHanSuDung);
             this.Controls.Add(lblMoTa);
             this.Controls.Add(txtMoTa);
             this.Controls.Add(chkTrangThai);
@@ -195,12 +215,19 @@ namespace SmartPOS.WinForms.UI.Forms.Products
                 txtHinhAnh.Text = _editingProduct.HinhAnh;
                 txtMoTa.Text = _editingProduct.MoTa;
                 chkTrangThai.Checked = _editingProduct.TrangThai;
+                dtpHanSuDung.Checked = _editingProduct.HanSuDung.HasValue;
+                if (_editingProduct.HanSuDung.HasValue)
+                {
+                    dtpHanSuDung.Value = _editingProduct.HanSuDung.Value;
+                }
 
                 SelectCategory(_editingProduct.MaLoai);
             }
             else
             {
                 chkTrangThai.Checked = true;
+                dtpHanSuDung.Checked = false;
+                txtSoLuongTon.Text = "0";
                 if (cboMaLoai.Items.Count > 0)
                 {
                     cboMaLoai.SelectedIndex = 0;
@@ -281,6 +308,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
                     MaLoai = maLoai,
                     HinhAnh = txtHinhAnh.Text,
                     MoTa = txtMoTa.Text,
+                    HanSuDung = dtpHanSuDung.Checked ? (DateTime?)dtpHanSuDung.Value.Date : null,
                     TrangThai = chkTrangThai.Checked,
                     NgayTao = _isEditMode && _editingProduct != null ? _editingProduct.NgayTao : DateTime.Now
                 };

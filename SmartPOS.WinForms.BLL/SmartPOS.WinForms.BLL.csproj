@@ -41,24 +41,19 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
     <Compile Include="Interfaces\IAuthService.cs" />
-    <Compile Include="Interfaces\IBarcodeService.cs" />
-    <Compile Include="Interfaces\ICashDrawerService.cs" />
     <Compile Include="Interfaces\ICategoryService.cs" />
-    <Compile Include="Interfaces\IDashboardService.cs" />
     <Compile Include="Interfaces\IInvoiceService.cs" />
+    <Compile Include="Interfaces\IProductLotService.cs" />
     <Compile Include="Interfaces\IProductService.cs" />
     <Compile Include="Interfaces\IReportService.cs" />
     <Compile Include="Interfaces\IStockInService.cs" />
     <Compile Include="Interfaces\IUserService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\AuthService.cs" />
-    <Compile Include="Services\BarcodeService.cs" />
-    <Compile Include="Services\CashDrawerService.cs" />
     <Compile Include="Services\CategoryService.cs" />
-    <Compile Include="Services\DashboardService.cs" />
     <Compile Include="Services\InvoiceService.cs" />
+    <Compile Include="Services\ProductLotService.cs" />
     <Compile Include="Services\ProductService.cs" />
     <Compile Include="Services\ReportService.cs" />
     <Compile Include="Services\StockInService.cs" />

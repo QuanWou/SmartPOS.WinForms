@@ -70,6 +70,15 @@ namespace SmartPOS.WinForms.BLL.Services
                         };
                     }
 
+                    if (product.HanSuDung.HasValue && product.HanSuDung.Value.Date < DateTime.Today)
+                    {
+                        return new OperationResult
+                        {
+                            IsSuccess = false,
+                            Message = "Sản phẩm đã hết hạn sử dụng. (" + product.TenSP + ")"
+                        };
+                    }
+
                     if (product.SoLuongTon < item.SoLuong)
                     {
                         return new OperationResult
@@ -90,6 +99,14 @@ namespace SmartPOS.WinForms.BLL.Services
                     IsSuccess = maHD > 0,
                     Message = maHD > 0 ? MessageConstants.CheckoutSuccess : MessageConstants.CheckoutFailed,
                     DataId = maHD > 0 ? (int?)maHD : null
+                };
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = ex.Message
                 };
             }
             catch (Exception ex)

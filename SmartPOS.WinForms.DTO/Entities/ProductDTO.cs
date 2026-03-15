@@ -28,6 +28,8 @@ namespace SmartPOS.WinForms.DTO.Entities
 
         public string MoTa { get; set; }
 
+        public DateTime? HanSuDung { get; set; }
+
         public bool TrangThai { get; set; }
 
         public DateTime NgayTao { get; set; }

@@ -184,7 +184,15 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Name = "GiaNhap",
                 HeaderText = "Giá nhập",
                 DataPropertyName = "GiaNhap",
-                Width = 140
+                Width = 120
+            });
+
+            dgvDetails.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "HanSuDung",
+                HeaderText = "HSD",
+                DataPropertyName = "HanSuDung",
+                Width = 110
             });
 
             dgvDetails.Columns.Add(new DataGridViewTextBoxColumn
@@ -192,7 +200,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Name = "ThanhTien",
                 HeaderText = "Thành tiền",
                 DataPropertyName = "ThanhTien",
-                Width = 160
+                Width = 140
             });
         }
 
@@ -227,6 +235,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                     TenSP = product != null ? product.TenSP : string.Empty,
                     x.SoLuong,
                     GiaNhap = x.GiaNhapLucNhap.ToString("N0"),
+                    HanSuDung = x.HanSuDung.HasValue ? x.HanSuDung.Value.ToString("dd/MM/yyyy") : "-",
                     ThanhTien = x.ThanhTien.ToString("N0")
                 };
             }).ToList();
