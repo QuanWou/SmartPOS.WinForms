@@ -16,6 +16,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         private readonly ICategoryService _categoryService;
         private readonly ProductDTO _editingProduct;
         private readonly bool _isEditMode;
+        private readonly string _initialBarcode;
 
         public bool IsSavedSuccessfully { get; private set; }
 
@@ -53,6 +54,18 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             _productService = new ProductService();
             _categoryService = new CategoryService();
             _isEditMode = false;
+
+            InitializeComponent();
+        }
+
+        public frmProductEdit(string initialBarcode)
+        {
+            _productService = new ProductService();
+            _categoryService = new CategoryService();
+            _isEditMode = false;
+            _initialBarcode = string.IsNullOrWhiteSpace(initialBarcode)
+                ? string.Empty
+                : initialBarcode.Trim();
 
             InitializeComponent();
         }
@@ -228,9 +241,15 @@ namespace SmartPOS.WinForms.UI.Forms.Products
                 chkTrangThai.Checked = true;
                 dtpHanSuDung.Checked = false;
                 txtSoLuongTon.Text = "0";
+                txtMaVach.Text = _initialBarcode;
                 if (cboMaLoai.Items.Count > 0)
                 {
                     cboMaLoai.SelectedIndex = 0;
+                }
+
+                if (!string.IsNullOrWhiteSpace(_initialBarcode))
+                {
+                    txtTenSP.Focus();
                 }
             }
         }

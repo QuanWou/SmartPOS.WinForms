@@ -5,6 +5,7 @@ using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
 using SmartPOS.WinForms.UI.Forms.Invoices;
+using SmartPOS.WinForms.UI.Forms.Shared;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -44,6 +45,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private Label lblSearch;
         private TextBox txtSearch;
         private Button btnScan;
+        private Button btnCameraScan;
+        private Button btnPhoneScan;
         private Button btnThanhToan;
         private Button btnLamMoi;
 
@@ -149,7 +152,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             lblSubtitle = new Label
             {
-                Text = "T\u00ecm s\u1ea3n ph\u1ea9m theo t\u00ean ho\u1eb7c m\u00e3 v\u1ea1ch \u0111\u1ec3 th\u00eam v\u00e0o gi\u1ecf h\u00e0ng",
+                Text = "T\u00ecm s\u1ea3n ph\u1ea9m theo t\u00ean ho\u1eb7c m\u00e3 v\u1ea1ch, ho\u1eb7c qu\u00e9t b\u1eb1ng camera \u0111\u1ec3 th\u00eam v\u00e0o gi\u1ecf h\u00e0ng",
                 Font = new Font("Segoe UI", 9F),
                 ForeColor = TextSoft,
                 AutoSize = true,
@@ -158,7 +161,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             pnlSearch = new Panel
             {
-                Size = new Size(620, 40),
+                Size = new Size(800, 40),
                 Location = new Point(18, 60),
                 BackColor = FieldColor
             };
@@ -175,15 +178,15 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 BorderStyle = BorderStyle.None,
                 Font = new Font("Segoe UI", 10F),
                 Location = new Point(12, 11),
-                Width = 430
+                Width = 300
             };
             txtSearch.KeyDown += TxtSearch_KeyDown;
 
             btnScan = new Button
             {
                 Text = "T\u00ecm",
-                Size = new Size(80, 28),
-                Location = new Point(450, 6),
+                Size = new Size(72, 28),
+                Location = new Point(362, 6),
                 BackColor = PrimaryMid,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
@@ -191,11 +194,35 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             btnScan.FlatAppearance.BorderSize = 0;
             btnScan.Click += BtnScan_Click;
 
+            btnCameraScan = new Button
+            {
+                Text = "Qu\u00e9t cam",
+                Size = new Size(96, 28),
+                Location = new Point(440, 6),
+                BackColor = PrimaryDark,
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnCameraScan.FlatAppearance.BorderSize = 0;
+            btnCameraScan.Click += BtnCameraScan_Click;
+
+            btnPhoneScan = new Button
+            {
+                Text = "Qu\u00e9t \u0111t",
+                Size = new Size(88, 28),
+                Location = new Point(542, 6),
+                BackColor = Color.FromArgb(49, 82, 182),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnPhoneScan.FlatAppearance.BorderSize = 0;
+            btnPhoneScan.Click += BtnPhoneScan_Click;
+
             btnLamMoi = new Button
             {
                 Text = "L\u00e0m m\u1edbi",
                 Size = new Size(80, 28),
-                Location = new Point(536, 6),
+                Location = new Point(636, 6),
                 BackColor = FieldColor,
                 ForeColor = Color.Black,
                 FlatStyle = FlatStyle.Flat
@@ -205,6 +232,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             pnlSearch.Controls.Add(txtSearch);
             pnlSearch.Controls.Add(btnScan);
+            pnlSearch.Controls.Add(btnCameraScan);
+            pnlSearch.Controls.Add(btnPhoneScan);
             pnlSearch.Controls.Add(btnLamMoi);
 
             pnlTop.Controls.Add(lblTitle);
@@ -708,6 +737,38 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private void BtnScan_Click(object sender, EventArgs e)
         {
             SearchProducts();
+        }
+
+        private void BtnCameraScan_Click(object sender, EventArgs e)
+        {
+            using (frmCameraScanner frm = new frmCameraScanner(
+                "Quét mã bán hàng",
+                "Đưa mã vạch sản phẩm vào giữa khung hình. Khi nhận được mã, hệ thống sẽ tự thêm sản phẩm vào giỏ hàng."))
+            {
+                if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
+                {
+                    return;
+                }
+
+                txtSearch.Text = frm.ScannedCode;
+                SearchProducts();
+            }
+        }
+
+        private void BtnPhoneScan_Click(object sender, EventArgs e)
+        {
+            using (frmPhoneScannerBridge frm = new frmPhoneScannerBridge(
+                "Qu\u00e9t b\u1eb1ng \u0111i\u1ec7n tho\u1ea1i",
+                "M\u1edf \u0111i\u1ec7n tho\u1ea1i c\u00f9ng m\u1ea1ng, qu\u00e9t QR \u0111\u1ec3 m\u1edf trang g\u1eedi m\u00e3, r\u1ed3i ch\u1ee5p \u1ea3nh barcode b\u1eb1ng camera \u0111i\u1ec7n tho\u1ea1i."))
+            {
+                if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
+                {
+                    return;
+                }
+
+                txtSearch.Text = frm.ScannedCode;
+                SearchProducts();
+            }
         }
 
         private void TxtSearch_KeyDown(object sender, KeyEventArgs e)

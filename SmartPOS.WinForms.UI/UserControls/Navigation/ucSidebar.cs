@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Linq;
 using System.Windows.Forms;
+using SmartPOS.WinForms.Common.Session;
 
 namespace SmartPOS.WinForms.UI.UserControls.Navigation
 {
@@ -51,12 +53,10 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             ("⊘",  "Ngừng bán / hết hạn",  "ExpiredProducts"),
             ("◎",  "Sắp hết hàng",         "LowStocks"),
             ("▦",  "Danh mục",             "Category"),
-            ("▧",  "Danh mục phụ",         "SubCategory"),
             ("---","",                     "sep2"),
 
             ("◫",  "Nhập kho",             "ManageStock"),
             ("↺",  "Lịch sử nhập kho",     "StockAdjust"),
-            ("⇄",  "Chuyển kho",           "StockTransfer"),
         };
 
         public UcSidebar()
@@ -111,7 +111,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             _flpMenu.VerticalScroll.Visible = false;
             _flpMenu.HorizontalScroll.Enabled = false;
 
-            foreach (var item in _items)
+            foreach (var item in _items.Where(x => IsMenuVisible(x.Key)))
             {
                 _flpMenu.Controls.Add(item.Key.StartsWith("sep")
                     ? (Control)BuildSeparator()
@@ -120,6 +120,33 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
             this.Controls.Add(_flpMenu);
             this.Controls.Add(_pnlLogo);
+        }
+
+        private bool IsMenuVisible(string key)
+        {
+            if (key.StartsWith("sep"))
+            {
+                return true;
+            }
+
+            if (!SessionManager.IsStaff)
+            {
+                return true;
+            }
+
+            switch (key)
+            {
+                case "Dashboard":
+                case "POS":
+                case "Invoices":
+                case "Products":
+                case "ExpiredProducts":
+                case "LowStocks":
+                    return true;
+
+                default:
+                    return false;
+            }
         }
 
         private Panel BuildSeparator()

@@ -130,6 +130,13 @@
     <Compile Include="Forms\Reports\frmRevenueReport.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\Shared\frmPhoneScannerBridge.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Shared\PhoneScanBridgeServer.cs" />
+    <Compile Include="Forms\Shared\frmCameraScanner.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\Stock\frmLowStock.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -5,10 +5,13 @@ using System.Linq;
 using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
+using SmartPOS.WinForms.Common.Helpers;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Forms.Products;
+using SmartPOS.WinForms.UI.Forms.Shared;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
 {
@@ -28,6 +31,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private TextBox txtSearch;
         private Button btnSearch;
+        private Button btnCameraScan;
+        private Button btnPhoneScan;
         private Button btnAddItem;
         private Button btnSave;
 
@@ -65,6 +70,13 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void FrmStockIn_Load(object sender, EventArgs e)
         {
+            if (SessionManager.IsStaff)
+            {
+                MessageBox.Show("Bạn không có quyền nhập kho.", "Thông báo");
+                this.BeginInvoke(new Action(Close));
+                return;
+            }
+
             LoadProducts();
             RefreshStockInDetailsView();
         }
@@ -90,7 +102,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             lblSubtitle = new Label
             {
-                Text = "Chọn sản phẩm và tạo phiếu nhập kho mới",
+                Text = "Chọn sản phẩm, quét mã bằng camera nếu cần, rồi nhập tay số lượng, giá nhập và hạn sử dụng",
                 Font = new Font("Segoe UI", 9F),
                 ForeColor = Color.Gray,
                 AutoSize = true,
@@ -123,10 +135,34 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             btnSearch.FlatAppearance.BorderSize = 0;
             btnSearch.Click += BtnSearch_Click;
 
+            btnCameraScan = new Button
+            {
+                Text = "Quét cam",
+                Location = new Point(440, 62),
+                Size = new Size(100, 30),
+                BackColor = Color.FromArgb(22, 32, 72),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnCameraScan.FlatAppearance.BorderSize = 0;
+            btnCameraScan.Click += BtnCameraScan_Click;
+
+            btnPhoneScan = new Button
+            {
+                Text = "Qu\u00e9t \u0111t",
+                Location = new Point(550, 62),
+                Size = new Size(100, 30),
+                BackColor = Color.FromArgb(49, 82, 182),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnPhoneScan.FlatAppearance.BorderSize = 0;
+            btnPhoneScan.Click += BtnPhoneScan_Click;
+
             btnAddItem = new Button
             {
                 Text = "Thêm vào phiếu",
-                Location = new Point(440, 62),
+                Location = new Point(660, 62),
                 Size = new Size(110, 30),
                 BackColor = Color.FromArgb(90, 110, 200),
                 ForeColor = Color.White,
@@ -140,6 +176,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             pnlHeader.Controls.Add(lblSearch);
             pnlHeader.Controls.Add(txtSearch);
             pnlHeader.Controls.Add(btnSearch);
+            pnlHeader.Controls.Add(btnCameraScan);
+            pnlHeader.Controls.Add(btnPhoneScan);
             pnlHeader.Controls.Add(btnAddItem);
 
             pnlLeft = new Panel
@@ -476,112 +514,71 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void BtnAddItem_Click(object sender, EventArgs e)
         {
-            if (dgvProducts.CurrentRow == null)
-            {
-                MessageBox.Show("Vui lòng chọn sản phẩm để thêm.", "Thông báo");
-                return;
-            }
-
-            object cellValue = dgvProducts.CurrentRow.Cells["MaSP"].Value;
-            if (cellValue == null)
-            {
-                MessageBox.Show("Không xác định được sản phẩm.", "Thông báo");
-                return;
-            }
-
-            int maSP;
-            if (!int.TryParse(cellValue.ToString(), out maSP))
-            {
-                MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
-                return;
-            }
-
-            ProductDTO product = _productService.GetById(maSP);
+            ProductDTO product = GetSelectedProductFromGrid();
             if (product == null)
             {
-                MessageBox.Show("Không tìm thấy sản phẩm.", "Thông báo");
                 return;
             }
 
-            string soLuongText = Prompt.ShowDialog("Nhập số lượng:", "Thêm vào phiếu nhập", "1");
-            if (string.IsNullOrWhiteSpace(soLuongText))
+            AddProductToStockIn(product);
+        }
+
+        private void BtnCameraScan_Click(object sender, EventArgs e)
+        {
+            using (frmCameraScanner frm = new frmCameraScanner(
+                "Quét mã nhập kho",
+                "Quét mã vạch sản phẩm để nhận diện sản phẩm trước. Sau đó bạn sẽ nhập tay số lượng, giá nhập và hạn sử dụng của lô mới."))
             {
-                return;
-            }
-
-            int soLuong;
-            if (!int.TryParse(soLuongText.Trim(), out soLuong) || soLuong <= 0)
-            {
-                MessageBox.Show("Số lượng không hợp lệ.", "Thông báo");
-                return;
-            }
-
-            string giaNhapText = Prompt.ShowDialog("Nhập giá nhập:", "Thêm vào phiếu nhập", product.GiaNhap.ToString("0.##"));
-            if (string.IsNullOrWhiteSpace(giaNhapText))
-            {
-                return;
-            }
-
-            decimal giaNhap;
-            if (!decimal.TryParse(giaNhapText.Trim(), out giaNhap) || giaNhap < 0)
-            {
-                MessageBox.Show("Giá nhập không hợp lệ.", "Thông báo");
-                return;
-            }
-
-            string hanSuDungText = Prompt.ShowDialog(
-                "Nhập hạn sử dụng (dd/MM/yyyy, bỏ trống nếu không có):",
-                "Thêm vào phiếu nhập",
-                product.HanSuDung.HasValue ? product.HanSuDung.Value.ToString("dd/MM/yyyy") : string.Empty);
-
-            DateTime? hanSuDung = null;
-            if (!string.IsNullOrWhiteSpace(hanSuDungText))
-            {
-                DateTime parsedDate;
-                string[] supportedFormats = { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd" };
-
-                if (!DateTime.TryParseExact(
-                    hanSuDungText.Trim(),
-                    supportedFormats,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.None,
-                    out parsedDate))
+                if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
                 {
-                    MessageBox.Show("Hạn sử dụng không hợp lệ.", "Thông báo");
                     return;
                 }
 
-                hanSuDung = parsedDate.Date;
-            }
+                txtSearch.Text = frm.ScannedCode;
+                SearchProducts();
 
-            StockInDetailDTO existing = _stockInItems.FirstOrDefault(x =>
-                x.MaSP == maSP &&
-                x.GiaNhapLucNhap == giaNhap &&
-                x.HanSuDung == hanSuDung);
-            if (existing == null)
-            {
-                _stockInItems.Add(new StockInDetailDTO
+                ProductDTO product = FindProductByBarcode(frm.ScannedCode);
+                if (product == null)
                 {
-                    LineId = Guid.NewGuid(),
-                    MaSP = maSP,
-                    SoLuong = soLuong,
-                    GiaNhapLucNhap = giaNhap,
-                    ThanhTien = soLuong * giaNhap,
-                    HanSuDung = hanSuDung
-                });
-            }
-            else
-            {
-                existing.SoLuong += soLuong;
-                existing.GiaNhapLucNhap = giaNhap;
-                existing.ThanhTien = existing.SoLuong * existing.GiaNhapLucNhap;
-                if (hanSuDung.HasValue)
-                {
-                    existing.HanSuDung = hanSuDung;
+                    product = PromptCreateProductFromBarcode(frm.ScannedCode);
+                    if (product == null)
+                    {
+                        return;
+                    }
                 }
-            }
 
-            RefreshStockInDetailsView();
+                SelectProductRow(product.MaSP);
+                AddProductToStockIn(product);
+            }
+        }
+
+        private void BtnPhoneScan_Click(object sender, EventArgs e)
+        {
+            using (frmPhoneScannerBridge frm = new frmPhoneScannerBridge(
+                "Qu\u00e9t nh\u1eadp kho b\u1eb1ng \u0111i\u1ec7n tho\u1ea1i",
+                "D\u00f9ng camera \u0111i\u1ec7n tho\u1ea1i \u0111\u1ec3 ch\u1ee5p m\u00e3 v\u1ea1ch, g\u1eedi v\u1ec1 m\u00e1y t\u00ednh, r\u1ed3i app s\u1ebd t\u00ecm s\u1ea3n ph\u1ea9m v\u00e0 m\u1edf lu\u1ed3ng nh\u1eadp l\u00f4."))
+            {
+                if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
+                {
+                    return;
+                }
+
+                txtSearch.Text = frm.ScannedCode;
+                SearchProducts();
+
+                ProductDTO product = FindProductByBarcode(frm.ScannedCode);
+                if (product == null)
+                {
+                    product = PromptCreateProductFromBarcode(frm.ScannedCode);
+                    if (product == null)
+                    {
+                        return;
+                    }
+                }
+
+                SelectProductRow(product.MaSP);
+                AddProductToStockIn(product);
+            }
         }
 
         private void DgvStockInDetails_DoubleClick(object sender, EventArgs e)
@@ -665,6 +662,220 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 RefreshStockInDetailsView();
                 LoadProducts();
             }
+        }
+
+        private ProductDTO GetSelectedProductFromGrid()
+        {
+            if (dgvProducts.CurrentRow == null)
+            {
+                MessageBox.Show("Vui lòng chọn sản phẩm để thêm.", "Thông báo");
+                return null;
+            }
+
+            object cellValue = dgvProducts.CurrentRow.Cells["MaSP"].Value;
+            if (cellValue == null)
+            {
+                MessageBox.Show("Không xác định được sản phẩm.", "Thông báo");
+                return null;
+            }
+
+            int maSP;
+            if (!int.TryParse(cellValue.ToString(), out maSP))
+            {
+                MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
+                return null;
+            }
+
+            ProductDTO product = _productService.GetById(maSP);
+            if (product == null)
+            {
+                MessageBox.Show("Không tìm thấy sản phẩm.", "Thông báo");
+                return null;
+            }
+
+            return product;
+        }
+
+        private ProductDTO FindProductByBarcode(string barcode)
+        {
+            string normalizedBarcode = string.IsNullOrWhiteSpace(barcode)
+                ? string.Empty
+                : barcode.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedBarcode))
+            {
+                return null;
+            }
+
+            ProductDTO product = _products != null
+                ? _products.FirstOrDefault(x =>
+                    !string.IsNullOrWhiteSpace(x.MaVach) &&
+                    string.Equals(x.MaVach.Trim(), normalizedBarcode, StringComparison.OrdinalIgnoreCase))
+                : null;
+
+            return product ?? _productService.GetByBarcode(normalizedBarcode);
+        }
+
+        private ProductDTO PromptCreateProductFromBarcode(string barcode)
+        {
+            string normalizedBarcode = string.IsNullOrWhiteSpace(barcode)
+                ? string.Empty
+                : barcode.Trim();
+
+            if (!BarcodeHelper.IsValidBarcode(normalizedBarcode))
+            {
+                MessageBox.Show("Không tìm thấy sản phẩm theo mã vừa quét.", "Thông báo");
+                return null;
+            }
+
+            DialogResult result = MessageBox.Show(
+                "Mã vạch này chưa có trong hệ thống. Bạn có muốn chuyển sang thêm sản phẩm mới không?",
+                "Sản phẩm mới",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result != DialogResult.Yes)
+            {
+                return null;
+            }
+
+            using (var frm = new frmProductEdit(normalizedBarcode))
+            {
+                frm.ShowDialog(this);
+                if (!frm.IsSavedSuccessfully)
+                {
+                    return null;
+                }
+            }
+
+            LoadProducts();
+            txtSearch.Text = normalizedBarcode;
+            SearchProducts();
+
+            ProductDTO product = FindProductByBarcode(normalizedBarcode);
+            if (product == null)
+            {
+                MessageBox.Show("Đã lưu sản phẩm mới nhưng chưa đọc lại được dữ liệu sản phẩm.", "Thông báo");
+                return null;
+            }
+
+            return product;
+        }
+
+        private void SelectProductRow(int maSP)
+        {
+            foreach (DataGridViewRow row in dgvProducts.Rows)
+            {
+                object cellValue = row.Cells["MaSP"].Value;
+                if (cellValue == null)
+                {
+                    continue;
+                }
+
+                int currentMaSP;
+                if (!int.TryParse(cellValue.ToString(), out currentMaSP))
+                {
+                    continue;
+                }
+
+                if (currentMaSP != maSP)
+                {
+                    continue;
+                }
+
+                row.Selected = true;
+                dgvProducts.CurrentCell = row.Cells["TenSP"];
+                dgvProducts.FirstDisplayedScrollingRowIndex = row.Index;
+                break;
+            }
+        }
+
+        private void AddProductToStockIn(ProductDTO product)
+        {
+            if (product == null)
+            {
+                return;
+            }
+
+            string soLuongText = Prompt.ShowDialog("Nhập số lượng:", "Thêm vào phiếu nhập", "1");
+            if (string.IsNullOrWhiteSpace(soLuongText))
+            {
+                return;
+            }
+
+            int soLuong;
+            if (!int.TryParse(soLuongText.Trim(), out soLuong) || soLuong <= 0)
+            {
+                MessageBox.Show("Số lượng không hợp lệ.", "Thông báo");
+                return;
+            }
+
+            string giaNhapText = Prompt.ShowDialog("Nhập giá nhập:", "Thêm vào phiếu nhập", product.GiaNhap.ToString("0.##"));
+            if (string.IsNullOrWhiteSpace(giaNhapText))
+            {
+                return;
+            }
+
+            decimal giaNhap;
+            if (!decimal.TryParse(giaNhapText.Trim(), out giaNhap) || giaNhap < 0)
+            {
+                MessageBox.Show("Giá nhập không hợp lệ.", "Thông báo");
+                return;
+            }
+
+            string hanSuDungText = Prompt.ShowDialog(
+                "Nhập hạn sử dụng (dd/MM/yyyy, bỏ trống nếu không có):",
+                "Thêm vào phiếu nhập",
+                product.HanSuDung.HasValue ? product.HanSuDung.Value.ToString("dd/MM/yyyy") : string.Empty);
+
+            DateTime? hanSuDung = null;
+            if (!string.IsNullOrWhiteSpace(hanSuDungText))
+            {
+                DateTime parsedDate;
+                string[] supportedFormats = { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd" };
+
+                if (!DateTime.TryParseExact(
+                    hanSuDungText.Trim(),
+                    supportedFormats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out parsedDate))
+                {
+                    MessageBox.Show("Hạn sử dụng không hợp lệ.", "Thông báo");
+                    return;
+                }
+
+                hanSuDung = parsedDate.Date;
+            }
+
+            StockInDetailDTO existing = _stockInItems.FirstOrDefault(x =>
+                x.MaSP == product.MaSP &&
+                x.GiaNhapLucNhap == giaNhap &&
+                x.HanSuDung == hanSuDung);
+            if (existing == null)
+            {
+                _stockInItems.Add(new StockInDetailDTO
+                {
+                    LineId = Guid.NewGuid(),
+                    MaSP = product.MaSP,
+                    SoLuong = soLuong,
+                    GiaNhapLucNhap = giaNhap,
+                    ThanhTien = soLuong * giaNhap,
+                    HanSuDung = hanSuDung
+                });
+            }
+            else
+            {
+                existing.SoLuong += soLuong;
+                existing.GiaNhapLucNhap = giaNhap;
+                existing.ThanhTien = existing.SoLuong * existing.GiaNhapLucNhap;
+                if (hanSuDung.HasValue)
+                {
+                    existing.HanSuDung = hanSuDung;
+                }
+            }
+
+            RefreshStockInDetailsView();
         }
 
         private static class Prompt

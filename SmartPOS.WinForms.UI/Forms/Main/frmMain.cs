@@ -5,6 +5,7 @@ using SmartPOS.WinForms.UI.Forms.Reports;
 using SmartPOS.WinForms.UI.Forms.Stock;
 using SmartPOS.WinForms.UI.Forms.Users;
 using SmartPOS.WinForms.UI.Forms.Products;
+using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.UI.UserControls;
 using SmartPOS.WinForms.UI.UserControls.Navigation;
 using System;
@@ -94,6 +95,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 Dock = DockStyle.Top,
                 Height = 56
             };
+            topBar.AllowAddNew = !SessionManager.IsStaff;
 
             topBar.BtnPOSClicked += (s, e) =>
             {
@@ -309,6 +311,12 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         // ══════════════════════════════════════════════════════════════════
         private void Sidebar_MenuClicked(object sender, string menuKey)
         {
+            if (!CanAccessMenu(menuKey))
+            {
+                MessageBox.Show("Bạn không có quyền truy cập chức năng này.", "Thông báo");
+                return;
+            }
+
             switch (menuKey)
             {
                 case "Dashboard":
@@ -342,20 +350,12 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                     LoadPage(new frmCategories());
                     break;
 
-                case "SubCategory":
-                    NavigatePlaceholder("Danh mục phụ");
-                    break;
-
                 case "ManageStock":
                     LoadPage(new frmStockIn());
                     break;
 
                 case "StockAdjust":
                     LoadPage(new frmStockHistory());
-                    break;
-
-                case "StockTransfer":
-                    NavigatePlaceholder("Chuyển kho");
                     break;
 
                 case "POS":
@@ -377,6 +377,28 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 default:
                     NavigatePlaceholder(menuKey);
                     break;
+            }
+        }
+
+        private bool CanAccessMenu(string menuKey)
+        {
+            if (!SessionManager.IsStaff)
+            {
+                return true;
+            }
+
+            switch (menuKey)
+            {
+                case "Dashboard":
+                case "POS":
+                case "Invoices":
+                case "Products":
+                case "ExpiredProducts":
+                case "LowStocks":
+                    return true;
+
+                default:
+                    return false;
             }
         }
 

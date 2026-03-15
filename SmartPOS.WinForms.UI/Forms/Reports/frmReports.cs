@@ -8,6 +8,7 @@ using SmartPOS.WinForms.DTO.Entities;
 using System.Text;
 using System.IO;
 using System.Globalization;
+using SmartPOS.WinForms.Common.Session;
 namespace SmartPOS.WinForms.UI.Forms.Reports
 {
     public class frmReports : Form
@@ -178,6 +179,13 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
 
         private void FrmReports_Load(object sender, EventArgs e)
         {
+            if (SessionManager.IsStaff)
+            {
+                MessageBox.Show("Bạn không có quyền xem báo cáo tổng.", "Thông báo");
+                this.BeginInvoke(new Action(Close));
+                return;
+            }
+
             dtpFromDate.Value = DateTime.Today.AddMonths(-1);
             dtpToDate.Value = DateTime.Today;
             LoadSummary();
@@ -194,27 +202,45 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
                 BorderStyle = BorderStyle.FixedSingle
             };
 
-            lblTongDoanhThu = BuildSummaryItem("Tổng doanh thu", "0 đ", 20);
-            lblTongHoaDon = BuildSummaryItem("Số hóa đơn", "0", 260);
-            lblTongNhapKho = BuildSummaryItem("Phiếu nhập", "0", 470);
-            lblTonKhoThap = BuildSummaryItem("Sắp hết hàng", "0", 680);
+            TableLayoutPanel summaryGrid = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 4,
+                RowCount = 1,
+                BackColor = Color.Transparent,
+                Padding = new Padding(18, 12, 18, 12)
+            };
+            summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            summaryGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            summaryGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-            pnlSummary.Controls.Add(lblTongDoanhThu);
-            pnlSummary.Controls.Add(lblTongHoaDon);
-            pnlSummary.Controls.Add(lblTongNhapKho);
-            pnlSummary.Controls.Add(lblTonKhoThap);
+            lblTongDoanhThu = BuildSummaryItem("Tổng doanh thu", "0 đ");
+            lblTongHoaDon = BuildSummaryItem("Số hóa đơn", "0");
+            lblTongNhapKho = BuildSummaryItem("Phiếu nhập", "0");
+            lblTonKhoThap = BuildSummaryItem("Sắp hết hàng", "0");
+
+            summaryGrid.Controls.Add(lblTongDoanhThu, 0, 0);
+            summaryGrid.Controls.Add(lblTongHoaDon, 1, 0);
+            summaryGrid.Controls.Add(lblTongNhapKho, 2, 0);
+            summaryGrid.Controls.Add(lblTonKhoThap, 3, 0);
+
+            pnlSummary.Controls.Add(summaryGrid);
         }
 
-        private Label BuildSummaryItem(string title, string value, int x)
+        private Label BuildSummaryItem(string title, string value)
         {
             return new Label
             {
                 AutoSize = false,
-                Size = new Size(220, 60),
-                Location = new Point(x, 15),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(6, 0, 6, 0),
+                Padding = new Padding(10, 4, 10, 4),
                 Text = title + Environment.NewLine + value,
                 Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(22, 32, 72)
+                ForeColor = Color.FromArgb(22, 32, 72),
+                TextAlign = ContentAlignment.MiddleLeft
             };
         }
 
