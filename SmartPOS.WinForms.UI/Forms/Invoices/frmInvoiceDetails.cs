@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using SmartPOS.WinForms.Common.Session;
 
 namespace SmartPOS.WinForms.UI.Forms.Invoices
 {
@@ -218,6 +219,15 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             if (invoice == null)
             {
                 MessageBox.Show("Không tìm thấy hóa đơn.", "Thông báo");
+                this.Close();
+                return;
+            }
+
+            if (SessionManager.IsStaff &&
+                SessionManager.CurrentUser != null &&
+                invoice.MaNV != SessionManager.CurrentUser.MaNV)
+            {
+                MessageBox.Show("Bạn chỉ được xem hóa đơn do mình tạo.", "Thông báo");
                 this.Close();
                 return;
             }

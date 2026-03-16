@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Windows.Forms;
+using SmartPOS.WinForms.Common.Session;
 
 namespace SmartPOS.WinForms.UI.UserControls.Navigation
 {
@@ -22,7 +23,13 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         private Label _lblTitle;
         private RoundedSearchBox _searchBox;
         private Panel _rightPanel;
+        private Button _btnPOS;
+        private Button _btnAdd;
+        private Button _btnBell;
+        private Button _btnSettings;
+        private Button _btnAvatar;
         private string _titleText = "Dashboard";
+        private bool _allowAddNew = true;
 
         public string TitleText
         {
@@ -38,12 +45,24 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
                 }
             }
         }
+
+        public bool AllowAddNew
+        {
+            get { return _allowAddNew; }
+            set
+            {
+                _allowAddNew = value;
+                UpdateRightPanelLayout();
+            }
+        }
+
         public UcTopBar()
         {
             this.Height = 60;
             this.Dock = DockStyle.Top;
             this.BackColor = BG;
             this.DoubleBuffered = true;
+            _allowAddNew = !SessionManager.IsStaff;
 
             BuildUI();
         }
@@ -85,33 +104,63 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
         private void BuildRightPanel(Panel p)
         {
-            var btnPOS = MakeTextButton("⊞  POS", ACCENT_DARK, Color.White, 88, 36);
-            btnPOS.Click += (s, e) => BtnPOSClicked?.Invoke(this, e);
+            _btnPOS = MakeTextButton("⊞  POS", ACCENT_DARK, Color.White, 88, 36);
+            _btnPOS.Click += (s, e) => BtnPOSClicked?.Invoke(this, e);
 
-            var btnAdd = MakeTextButton("＋  Thêm mới", ACCENT_MID, Color.White, 108, 36);
-            btnAdd.Click += (s, e) => BtnAddNewClicked?.Invoke(this, e);
-            btnAdd.MouseEnter += (s, e) => btnAdd.BackColor = Color.FromArgb(70, 90, 180);
-            btnAdd.MouseLeave += (s, e) => btnAdd.BackColor = ACCENT_MID;
+            _btnAdd = MakeTextButton("＋  Thêm mới", ACCENT_MID, Color.White, 108, 36);
+            _btnAdd.Click += (s, e) => BtnAddNewClicked?.Invoke(this, e);
+            _btnAdd.MouseEnter += (s, e) => _btnAdd.BackColor = Color.FromArgb(70, 90, 180);
+            _btnAdd.MouseLeave += (s, e) => _btnAdd.BackColor = ACCENT_MID;
 
-            var btnBell = MakeIconButton("🔔");
-            var btnSettings = MakeIconButton("⚙");
-            var btnAvatar = MakeAvatarButton("A", 36);
+            _btnBell = MakeIconButton("🔔");
+            _btnSettings = MakeIconButton("⚙");
+            _btnAvatar = MakeAvatarButton("A", 36);
+
+            p.Controls.AddRange(new Control[]
+            {
+                _btnAvatar, _btnBell, _btnSettings, _btnPOS, _btnAdd
+            });
+            UpdateRightPanelLayout();
+        }
+
+        private void UpdateRightPanelLayout()
+        {
+            if (_rightPanel == null || _btnPOS == null || _btnAdd == null)
+            {
+                return;
+            }
+
+            _btnAdd.Visible = _allowAddNew;
 
             const int PAD = 8;
             const int TOP = 12;
             int x = 0;
 
-            btnAvatar.Location = new Point(x, TOP); x += btnAvatar.Width + PAD;
-            btnBell.Location = new Point(x, TOP); x += btnBell.Width + PAD;
-            btnSettings.Location = new Point(x, TOP); x += btnSettings.Width + PAD + 4;
-            btnPOS.Location = new Point(x, TOP); x += btnPOS.Width + PAD;
-            btnAdd.Location = new Point(x, TOP); x += btnAdd.Width;
+            _btnAvatar.Location = new Point(x, TOP);
+            x += _btnAvatar.Width + PAD;
 
-            p.Width = x;
-            p.Controls.AddRange(new Control[]
+            _btnBell.Location = new Point(x, TOP);
+            x += _btnBell.Width + PAD;
+
+            _btnSettings.Location = new Point(x, TOP);
+            x += _btnSettings.Width + PAD + 4;
+
+            _btnPOS.Location = new Point(x, TOP);
+            x += _btnPOS.Width;
+
+            if (_btnAdd.Visible)
             {
-                btnAvatar, btnBell, btnSettings, btnPOS, btnAdd
-            });
+                x += PAD;
+                _btnAdd.Location = new Point(x, TOP);
+                x += _btnAdd.Width;
+            }
+
+            _rightPanel.Width = x;
+            if (IsHandleCreated)
+            {
+                RepositionControls();
+                Invalidate();
+            }
         }
 
         private void RepositionControls()

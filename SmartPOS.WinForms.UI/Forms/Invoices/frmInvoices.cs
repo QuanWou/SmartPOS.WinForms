@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
+using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 
 namespace SmartPOS.WinForms.UI.Forms.Invoices
@@ -197,6 +198,12 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
 
         private void FrmInvoices_Load(object sender, EventArgs e)
         {
+            if (SessionManager.IsStaff)
+            {
+                lblTitle.Text = "Hóa đơn của tôi";
+                lblSubtitle.Text = "Theo dõi các hóa đơn do bạn tạo và trạng thái thanh toán";
+            }
+
             LoadStatusFilter();
             LoadData();
 
@@ -217,6 +224,14 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
         {
             _users = _userService.GetAll().ToList();
             _invoices = _invoiceService.GetAll().ToList();
+
+            if (SessionManager.IsStaff && SessionManager.CurrentUser != null)
+            {
+                _invoices = _invoices
+                    .Where(x => x.MaNV == SessionManager.CurrentUser.MaNV)
+                    .ToList();
+            }
+
             BindGrid(_invoices);
         }
 

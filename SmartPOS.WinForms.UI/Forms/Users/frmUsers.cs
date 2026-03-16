@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Constants;
+using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 
 namespace SmartPOS.WinForms.UI.Forms.Users
@@ -190,6 +191,13 @@ namespace SmartPOS.WinForms.UI.Forms.Users
 
         private void FrmUsers_Load(object sender, EventArgs e)
         {
+            if (SessionManager.IsStaff)
+            {
+                MessageBox.Show("Bạn không có quyền quản lý người dùng.", "Thông báo");
+                this.BeginInvoke(new Action(Close));
+                return;
+            }
+
             LoadRoleFilter();
             LoadStatusFilter();
             LoadUsers();

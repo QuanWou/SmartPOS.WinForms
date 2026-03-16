@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
+using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
@@ -174,9 +175,17 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
         private void FrmExpiredProducts_Load(object sender, EventArgs e)
         {
+            ApplyRoleAccess();
             _categories = _categoryService.GetAll().ToList();
             LoadFilter();
             LoadIssues();
+        }
+
+        private void ApplyRoleAccess()
+        {
+            bool canManageStatus = !SessionManager.IsStaff;
+            btnEdit.Visible = canManageStatus;
+            btnRestore.Visible = canManageStatus;
         }
 
         private void BuildGridColumns()
