@@ -11,6 +11,11 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
     {
         public event EventHandler BtnPOSClicked;
         public event EventHandler BtnAddNewClicked;
+        public event EventHandler<string> SearchSubmitted;
+        public event EventHandler SearchCleared;
+        public event EventHandler BtnBellClicked;
+        public event EventHandler BtnSettingsClicked;
+        public event EventHandler BtnAvatarClicked;
 
         private static readonly Color BG = Color.White;
         private static readonly Color BORDER_CLR = Color.FromArgb(232, 235, 244);
@@ -30,6 +35,10 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         private Button _btnAvatar;
         private string _titleText = "Dashboard";
         private bool _allowAddNew = true;
+        private bool _suppressSearchClearedEvent;
+        private readonly Timer _searchTimer;
+        private readonly ToolTip _toolTip;
+        private string _lastSubmittedKeyword = string.Empty;
 
         public string TitleText
         {
@@ -56,6 +65,59 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             }
         }
 
+        public string SearchText
+        {
+            get { return _searchBox?.Text ?? string.Empty; }
+            set { SetSearchText(value, true); }
+        }
+
+        public string SearchPlaceholder
+        {
+            get { return _searchBox?.PlaceholderText ?? string.Empty; }
+            set
+            {
+                if (_searchBox != null)
+                {
+                    _searchBox.PlaceholderText = value;
+                }
+            }
+        }
+
+        public string AvatarText
+        {
+            get { return _btnAvatar?.Text ?? string.Empty; }
+            set
+            {
+                if (_btnAvatar != null)
+                {
+                    _btnAvatar.Text = string.IsNullOrWhiteSpace(value)
+                        ? "A"
+                        : value.Trim().Substring(0, 1).ToUpperInvariant();
+                }
+            }
+        }
+
+        public void ClearSearch(bool suppressEvent = false)
+        {
+            SetSearchText(string.Empty, suppressEvent);
+        }
+
+        public void SetSearchText(string value, bool suppressEvent = true)
+        {
+            if (_searchBox == null)
+            {
+                return;
+            }
+
+            _searchTimer.Stop();
+            _suppressSearchClearedEvent = suppressEvent;
+            _searchBox.Text = value ?? string.Empty;
+            _lastSubmittedKeyword = string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim();
+            _suppressSearchClearedEvent = false;
+        }
+
         public UcTopBar()
         {
             this.Height = 60;
@@ -63,6 +125,15 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             this.BackColor = BG;
             this.DoubleBuffered = true;
             _allowAddNew = !SessionManager.IsStaff;
+            _searchTimer = new Timer { Interval = 350 };
+            _searchTimer.Tick += SearchTimer_Tick;
+            _toolTip = new ToolTip
+            {
+                ShowAlways = true,
+                InitialDelay = 150,
+                ReshowDelay = 100,
+                AutoPopDelay = 5000
+            };
 
             BuildUI();
         }
@@ -85,6 +156,10 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
                 BackColor = FIELD_BG
             };
 
+            _searchBox.InnerKeyDown += SearchBox_KeyDown;
+            _searchBox.InnerTextChanged += SearchBox_TextChanged;
+            _toolTip.SetToolTip(_searchBox, "Nhập từ khóa để tìm kiếm hoặc mở nhanh chức năng.");
+
             _rightPanel = new Panel
             {
                 Height = 60,
@@ -105,16 +180,24 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         private void BuildRightPanel(Panel p)
         {
             _btnPOS = MakeTextButton("⊞  POS", ACCENT_DARK, Color.White, 88, 36);
-            _btnPOS.Click += (s, e) => BtnPOSClicked?.Invoke(this, e);
+            _btnPOS.Click += (s, e) => BtnPOSClicked?.Invoke(_btnPOS, e);
+            _toolTip.SetToolTip(_btnPOS, "Mở màn hình bán hàng.");
 
             _btnAdd = MakeTextButton("＋  Thêm mới", ACCENT_MID, Color.White, 108, 36);
-            _btnAdd.Click += (s, e) => BtnAddNewClicked?.Invoke(this, e);
+            _btnAdd.Click += (s, e) => BtnAddNewClicked?.Invoke(_btnAdd, e);
             _btnAdd.MouseEnter += (s, e) => _btnAdd.BackColor = Color.FromArgb(70, 90, 180);
             _btnAdd.MouseLeave += (s, e) => _btnAdd.BackColor = ACCENT_MID;
+            _toolTip.SetToolTip(_btnAdd, "Thêm bản ghi mới theo màn hình hiện tại.");
 
             _btnBell = MakeIconButton("🔔");
+            _btnBell.Click += (s, e) => BtnBellClicked?.Invoke(_btnBell, e);
+            _toolTip.SetToolTip(_btnBell, "Xem cảnh báo và thông báo hệ thống.");
             _btnSettings = MakeIconButton("⚙");
+            _btnSettings.Click += (s, e) => BtnSettingsClicked?.Invoke(_btnSettings, e);
+            _toolTip.SetToolTip(_btnSettings, "Mở các thao tác nhanh.");
             _btnAvatar = MakeAvatarButton("A", 36);
+            _btnAvatar.Click += (s, e) => BtnAvatarClicked?.Invoke(_btnAvatar, e);
+            _toolTip.SetToolTip(_btnAvatar, "Mở menu tài khoản.");
 
             p.Controls.AddRange(new Control[]
             {
@@ -161,6 +244,60 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
                 RepositionControls();
                 Invalidate();
             }
+        }
+
+        private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Enter)
+            {
+                return;
+            }
+
+            SubmitSearch();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        private void SearchBox_TextChanged(object sender, EventArgs e)
+        {
+            if (_suppressSearchClearedEvent)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_searchBox.Text))
+            {
+                _searchTimer.Stop();
+                _lastSubmittedKeyword = string.Empty;
+                SearchCleared?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            _searchTimer.Stop();
+            _searchTimer.Start();
+        }
+
+        private void SearchTimer_Tick(object sender, EventArgs e)
+        {
+            _searchTimer.Stop();
+            SubmitSearch();
+        }
+
+        private void SubmitSearch()
+        {
+            string keyword = _searchBox.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(keyword))
+            {
+                return;
+            }
+
+            if (string.Equals(_lastSubmittedKeyword, keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _lastSubmittedKeyword = keyword;
+            SearchSubmitted?.Invoke(this, keyword);
         }
 
         private void RepositionControls()
@@ -262,6 +399,18 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             path.CloseFigure();
             ctrl.Region = new Region(path);
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _searchTimer?.Stop();
+                _searchTimer?.Dispose();
+                _toolTip?.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
     }
 
     public class RoundedSearchBox : UserControl
@@ -274,8 +423,45 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         private static readonly Color BORDER_FOCUS = Color.FromArgb(90, 110, 200);
         private static readonly Color TEXT_COLOR = Color.FromArgb(40, 50, 80);
         private static readonly Color PLACEHOLDER = Color.FromArgb(160, 170, 195);
+        private string _placeholderText = "Tìm kiếm...";
 
-        public new string Text { get => _inner.Text; set => _inner.Text = value; }
+        public event KeyEventHandler InnerKeyDown;
+        public event EventHandler InnerTextChanged;
+
+        public string PlaceholderText
+        {
+            get { return _placeholderText; }
+            set
+            {
+                _placeholderText = string.IsNullOrWhiteSpace(value) ? "Tìm kiếm..." : value.Trim();
+
+                if (_inner == null)
+                {
+                    return;
+                }
+
+                if (_inner.ForeColor == PLACEHOLDER || string.IsNullOrWhiteSpace(_inner.Text))
+                {
+                    SetPlaceholder();
+                }
+            }
+        }
+
+        public new string Text
+        {
+            get => _inner.ForeColor == PLACEHOLDER ? string.Empty : _inner.Text;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    SetPlaceholder();
+                    return;
+                }
+
+                _inner.ForeColor = TEXT_COLOR;
+                _inner.Text = value;
+            }
+        }
 
         public RoundedSearchBox()
         {
@@ -293,6 +479,9 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             };
 
             SetPlaceholder();
+
+            _inner.KeyDown += (s, e) => InnerKeyDown?.Invoke(this, e);
+            _inner.TextChanged += (s, e) => InnerTextChanged?.Invoke(this, e);
 
             _inner.Enter += (s, e) =>
             {
@@ -322,7 +511,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
         private void SetPlaceholder()
         {
-            _inner.Text = "Tìm kiếm...";
+            _inner.Text = _placeholderText;
             _inner.ForeColor = PLACEHOLDER;
         }
 

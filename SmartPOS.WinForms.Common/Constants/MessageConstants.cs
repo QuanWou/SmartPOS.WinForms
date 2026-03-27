@@ -12,10 +12,8 @@ namespace SmartPOS.WinForms.Common.Constants
         public const string LoginFailed = "Tài khoản hoặc mật khẩu không đúng.";
         public const string EmptyUsername = "Vui lòng nhập tài khoản.";
         public const string EmptyPassword = "Vui lòng nhập mật khẩu.";
-
         public const string SaveSuccess = "Lưu dữ liệu thành công.";
         public const string SaveFailed = "Lưu dữ liệu thất bại.";
-
         public const string DeleteSuccess = "Xóa dữ liệu thành công.";
         public const string DeleteFailed = "Xóa dữ liệu thất bại.";
 

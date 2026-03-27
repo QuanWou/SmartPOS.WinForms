@@ -69,6 +69,23 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             BuildUI();
         }
 
+        public void SetActiveMenu(string menuKey)
+        {
+            if (string.IsNullOrWhiteSpace(menuKey))
+            {
+                return;
+            }
+
+            bool isVisibleMenu = _items.Any(x => x.Key == menuKey && IsMenuVisible(x.Key));
+            if (!isVisibleMenu || string.Equals(_activeMenu, menuKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _activeMenu = menuKey;
+            RefreshAllButtons();
+        }
+
         private void BuildUI()
         {
             _pnlLogo = new Panel

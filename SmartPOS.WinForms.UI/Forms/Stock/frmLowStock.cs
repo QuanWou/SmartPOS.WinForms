@@ -8,10 +8,11 @@ using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.UI.Forms.Main;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
 {
-    public class frmLowStock : Form
+    public class frmLowStock : Form, IGlobalSearchHandler
     {
         private readonly IProductService _productService;
 
@@ -291,6 +292,23 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             }
 
             BindGrid(query.OrderBy(x => x.SoLuongTon).ToList());
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtKeyword.Text = keyword ?? string.Empty;
+            SearchLowStock();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeyword.Text))
+            {
+                return;
+            }
+
+            txtKeyword.Clear();
+            SearchLowStock();
         }
 
         private void BindGrid(List<ProductDTO> products)

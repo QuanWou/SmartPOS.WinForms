@@ -1,3 +1,5 @@
+use SmartPOSWinForms;
+GO	
 ALTER TABLE Products
 ADD HanSuDung DATETIME NULL;
 GO

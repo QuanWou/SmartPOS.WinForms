@@ -7,10 +7,11 @@ using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
 {
-    public class frmExpiredProducts : Form
+    public class frmExpiredProducts : Form, IGlobalSearchHandler
     {
         private readonly IProductService _productService;
         private readonly ICategoryService _categoryService;
@@ -473,6 +474,23 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         {
             dgvProducts.DataSource = null;
             dgvProducts.DataSource = rows;
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtKeyword.Text = keyword ?? string.Empty;
+            BindGrid(BuildIssueRows());
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeyword.Text))
+            {
+                return;
+            }
+
+            txtKeyword.Clear();
+            BindGrid(BuildIssueRows());
         }
 
         private string GetCategoryName(int maLoai)

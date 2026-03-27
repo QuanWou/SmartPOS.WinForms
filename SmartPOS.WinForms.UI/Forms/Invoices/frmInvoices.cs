@@ -7,10 +7,11 @@ using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Invoices
 {
-    public class frmInvoices : Form
+    public class frmInvoices : Form, IGlobalSearchHandler
     {
         private readonly IInvoiceService _invoiceService;
         private readonly IUserService _userService;
@@ -300,6 +301,23 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             }
 
             BindGrid(query.ToList());
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtKeyword.Text = keyword ?? string.Empty;
+            SearchInvoices();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeyword.Text))
+            {
+                return;
+            }
+
+            txtKeyword.Clear();
+            SearchInvoices();
         }
 
         private void BindGrid(List<InvoiceDTO> invoices)

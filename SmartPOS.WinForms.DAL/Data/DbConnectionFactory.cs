@@ -17,6 +17,7 @@ namespace SmartPOS.WinForms.DAL.Data
                 .ConnectionStrings["SmartPOSConnection"]
                 .ConnectionString;
 
+            DatabaseSchemaInitializer.EnsureInitialized(connectionString);
             return new SqlConnection(connectionString);
         }
     }

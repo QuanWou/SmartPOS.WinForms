@@ -9,10 +9,11 @@ using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
 {
-    public class frmProducts : Form
+    public class frmProducts : Form, IGlobalSearchHandler
     {
         private readonly IProductService _productService;
         private readonly ICategoryService _categoryService;
@@ -404,6 +405,23 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
             var products = _productService.Search(request).ToList();
             BindGrid(products);
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtKeyword.Text = keyword ?? string.Empty;
+            SearchProducts();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeyword.Text))
+            {
+                return;
+            }
+
+            txtKeyword.Clear();
+            SearchProducts();
         }
 
         private void BindGrid(List<ProductDTO> products)

@@ -12,10 +12,11 @@ using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
 using SmartPOS.WinForms.UI.Forms.Products;
 using SmartPOS.WinForms.UI.Forms.Shared;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
 {
-    public class frmStockIn : Form
+    public class frmStockIn : Form, IGlobalSearchHandler
     {
         private readonly IProductService _productService;
         private readonly IStockInService _stockInService;
@@ -497,6 +498,23 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 .ToList();
 
             BindProductsGrid(filtered);
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtSearch.Text = keyword ?? string.Empty;
+            SearchProducts();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtSearch.Text))
+            {
+                return;
+            }
+
+            txtSearch.Clear();
+            SearchProducts();
         }
 
         private void BtnSearch_Click(object sender, EventArgs e)

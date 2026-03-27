@@ -54,6 +54,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Data\DatabaseSchemaInitializer.cs" />
     <Compile Include="Data\DbConnectionFactory.cs" />
     <Compile Include="Data\DbHelper.cs" />
     <Compile Include="Data\DbTransactionScope.cs" />

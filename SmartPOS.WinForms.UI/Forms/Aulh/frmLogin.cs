@@ -82,7 +82,7 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
                 Font = new Font("Segoe UI Semibold", 26F, FontStyle.Bold),
                 ForeColor = Color.White,
                 AutoSize = true,
-                Location = new Point(52, 205)
+                Location = new Point(52, 210)
             };
 
             lblBrandTagline = new Label
@@ -197,7 +197,7 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
                 ForeColor = Color.FromArgb(160, 170, 190),
                 AutoSize = true,
                 Cursor = Cursors.Hand,
-                Location = new Point(170, 415)
+                Location = new Point(190, 415)
             };
             lblThoat.Click += (s, e) => Application.Exit();
             lblThoat.MouseEnter += (s, e) => lblThoat.ForeColor = Color.FromArgb(22, 32, 72);

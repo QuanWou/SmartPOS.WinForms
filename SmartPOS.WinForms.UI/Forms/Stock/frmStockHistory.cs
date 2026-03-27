@@ -6,10 +6,11 @@ using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
 {
-    public class frmStockHistory : Form
+    public class frmStockHistory : Form, IGlobalSearchHandler
     {
         private readonly IStockInService _stockInService;
         private readonly IUserService _userService;
@@ -316,6 +317,23 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             query = query.Where(x => x.NgayNhap >= fromDate && x.NgayNhap <= toDate);
 
             BindGrid(query.ToList());
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtKeyword.Text = keyword ?? string.Empty;
+            SearchStockHistory();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeyword.Text))
+            {
+                return;
+            }
+
+            txtKeyword.Clear();
+            SearchStockHistory();
         }
     }
 }

@@ -8,10 +8,11 @@ using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Constants;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Users
 {
-    public class frmUsers : Form
+    public class frmUsers : Form, IGlobalSearchHandler
     {
         private readonly IUserService _userService;
 
@@ -318,6 +319,23 @@ namespace SmartPOS.WinForms.UI.Forms.Users
             }
 
             BindGrid(query.ToList());
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtKeyword.Text = keyword ?? string.Empty;
+            SearchUsers();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtKeyword.Text))
+            {
+                return;
+            }
+
+            txtKeyword.Clear();
+            SearchUsers();
         }
 
         private void BindGrid(List<UserDTO> users)

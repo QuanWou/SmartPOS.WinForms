@@ -7,10 +7,11 @@ using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
 {
-    public class frmCategories : Form
+    public class frmCategories : Form, IGlobalSearchHandler
     {
         private readonly ICategoryService _categoryService;
 
@@ -30,6 +31,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         private DataGridView dgvCategories;
 
         private int _selectedCategoryId = 0;
+        private List<CategoryDTO> _categories;
 
         public frmCategories()
         {
@@ -207,9 +209,13 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
         private void LoadCategories()
         {
-            List<CategoryDTO> categories = _categoryService.GetAll().ToList();
+            _categories = _categoryService.GetAll().ToList();
+            BindGrid(_categories);
+        }
 
-            var viewData = categories.Select(c => new
+        private void BindGrid(List<CategoryDTO> categories)
+        {
+            var viewData = (categories ?? new List<CategoryDTO>()).Select(c => new
             {
                 c.MaLoai,
                 c.TenLoai,
@@ -219,6 +225,31 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
             dgvCategories.DataSource = null;
             dgvCategories.DataSource = viewData;
+            dgvCategories.ClearSelection();
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            string normalizedKeyword = (keyword ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedKeyword))
+            {
+                BindGrid(_categories);
+                return;
+            }
+
+            List<CategoryDTO> filtered = (_categories ?? new List<CategoryDTO>())
+                .Where(x =>
+                    (!string.IsNullOrWhiteSpace(x.TenLoai) && x.TenLoai.IndexOf(normalizedKeyword, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (!string.IsNullOrWhiteSpace(x.MoTa) && x.MoTa.IndexOf(normalizedKeyword, StringComparison.OrdinalIgnoreCase) >= 0))
+                .ToList();
+
+            BindGrid(filtered);
+        }
+
+        public void ClearGlobalSearch()
+        {
+            BindGrid(_categories);
         }
 
         private void BtnAdd_Click(object sender, EventArgs e)

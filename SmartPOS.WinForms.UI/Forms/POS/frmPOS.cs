@@ -6,6 +6,7 @@ using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
 using SmartPOS.WinForms.UI.Forms.Invoices;
 using SmartPOS.WinForms.UI.Forms.Shared;
+using SmartPOS.WinForms.UI.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -15,7 +16,7 @@ using System.Windows.Forms;
 
 namespace SmartPOS.WinForms.UI.Forms.POS
 {
-    public class frmPOS : Form
+    public class frmPOS : Form, IGlobalSearchHandler
     {
         private static readonly Color SurfaceColor = Color.White;
         private static readonly Color PageColor = Color.FromArgb(248, 249, 251);
@@ -732,6 +733,23 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 .ToList();
 
             RenderProducts(filtered);
+        }
+
+        public void ApplyGlobalSearch(string keyword)
+        {
+            txtSearch.Text = keyword ?? string.Empty;
+            SearchProducts();
+        }
+
+        public void ClearGlobalSearch()
+        {
+            if (string.IsNullOrWhiteSpace(txtSearch.Text))
+            {
+                return;
+            }
+
+            txtSearch.Clear();
+            SearchProducts();
         }
 
         private void BtnScan_Click(object sender, EventArgs e)
