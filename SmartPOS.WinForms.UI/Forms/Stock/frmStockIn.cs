@@ -12,6 +12,7 @@ using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
 using SmartPOS.WinForms.UI.Forms.Products;
 using SmartPOS.WinForms.UI.Forms.Shared;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
@@ -20,6 +21,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
     {
         private readonly IProductService _productService;
         private readonly IStockInService _stockInService;
+        private readonly int? _initialProductId;
+        private bool _promptInitialProductOnLoad;
 
         private Panel pnlHeader;
         private Panel pnlLeft;
@@ -49,10 +52,17 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         private List<StockInDetailDTO> _stockInItems;
 
         public frmStockIn()
+            : this(null, false)
+        {
+        }
+
+        public frmStockIn(int? initialProductId, bool promptInitialProductOnLoad = false)
         {
             _productService = new ProductService();
             _stockInService = new StockInService();
             _stockInItems = new List<StockInDetailDTO>();
+            _initialProductId = initialProductId;
+            _promptInitialProductOnLoad = promptInitialProductOnLoad;
 
             InitializeComponent();
         }
@@ -80,6 +90,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             LoadProducts();
             RefreshStockInDetailsView();
+            ApplyInitialProductSelection();
         }
 
         private void BuildLayout()
@@ -279,6 +290,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Width = 100,
                 DefaultCellStyle = new DataGridViewCellStyle { Format = "N0" }
             });
+            UiGridHelper.ApplyResponsiveStyle(dgvProducts);
 
             card.Controls.Add(lbl);
             card.Controls.Add(dgvProducts);
@@ -376,6 +388,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Width = 100,
                 DefaultCellStyle = new DataGridViewCellStyle { Format = "N0" }
             });
+            UiGridHelper.ApplyResponsiveStyle(dgvStockInDetails);
 
             card.Controls.Add(lbl);
             card.Controls.Add(dgvStockInDetails);
@@ -441,6 +454,37 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 .ToList();
 
             BindProductsGrid(_products);
+        }
+
+        private void ApplyInitialProductSelection()
+        {
+            if (!_initialProductId.HasValue)
+            {
+                return;
+            }
+
+            ProductDTO product = _products != null
+                ? _products.FirstOrDefault(x => x.MaSP == _initialProductId.Value)
+                : null;
+
+            if (product == null)
+            {
+                return;
+            }
+
+            txtSearch.Text = !string.IsNullOrWhiteSpace(product.MaVach)
+                ? product.MaVach
+                : product.TenSP;
+            SearchProducts();
+            SelectProductRow(product.MaSP);
+
+            if (!_promptInitialProductOnLoad)
+            {
+                return;
+            }
+
+            _promptInitialProductOnLoad = false;
+            BeginInvoke((Action)(() => AddProductToStockIn(product)));
         }
 
         private void BindProductsGrid(List<ProductDTO> products)

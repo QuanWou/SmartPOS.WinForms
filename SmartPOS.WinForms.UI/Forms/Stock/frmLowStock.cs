@@ -8,6 +8,7 @@ using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.UI.Forms.Main;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
@@ -146,6 +147,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvLowStock);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblSubtitle);
@@ -159,6 +161,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             this.Controls.Add(dgvLowStock);
 
             this.Load += FrmLowStock_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmLowStock_Load(object sender, EventArgs e)
@@ -166,6 +169,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             btnStockIn.Visible = !SessionManager.IsStaff;
             LoadProducts();
             SearchLowStock();
+            UpdateResponsiveLayout();
         }
 
         private void BuildGridColumns()
@@ -257,9 +261,9 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void BtnStockIn_Click(object sender, EventArgs e)
         {
-            if (dgvLowStock.CurrentRow == null)
+            ProductDTO product = GetSelectedProduct();
+            if (product == null)
             {
-                MessageBox.Show("Vui lòng chọn sản phẩm cần nhập thêm.", "Thông báo");
                 return;
             }
 
@@ -269,11 +273,11 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             if (mainForm != null)
             {
-                mainForm.NavigateToPage(new frmStockIn());
+                mainForm.NavigateToPage(new frmStockIn(product.MaSP, true));
                 return;
             }
 
-            MessageBox.Show("Mở màn hình Nhập kho để bổ sung sản phẩm này.", "Thông báo");
+            MessageBox.Show("Không xác định được màn hình chính để chuyển sang Nhập kho.", "Thông báo");
         }
 
         private void SearchLowStock()
@@ -328,6 +332,46 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             dgvLowStock.DataSource = viewData;
         }
 
+        private ProductDTO GetSelectedProduct()
+        {
+            if (dgvLowStock.CurrentRow == null)
+            {
+                MessageBox.Show("Vui lòng chọn sản phẩm cần nhập thêm.", "Thông báo");
+                return null;
+            }
+
+            object cellValue = dgvLowStock.CurrentRow.Cells["MaSP"].Value;
+            if (cellValue == null)
+            {
+                MessageBox.Show("Không xác định được sản phẩm cần nhập thêm.", "Thông báo");
+                return null;
+            }
+
+            int maSP;
+            if (!int.TryParse(cellValue.ToString(), out maSP))
+            {
+                MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
+                return null;
+            }
+
+            ProductDTO product = _products != null
+                ? _products.FirstOrDefault(x => x.MaSP == maSP)
+                : null;
+
+            if (product == null)
+            {
+                product = _productService.GetById(maSP);
+            }
+
+            if (product == null)
+            {
+                MessageBox.Show("Không tìm thấy sản phẩm cần nhập thêm.", "Thông báo");
+                return null;
+            }
+
+            return product;
+        }
+
         private string GetDanhGia(int soLuongTon)
         {
             if (soLuongTon <= 5)
@@ -341,6 +385,32 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             }
 
             return "Theo dõi";
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int buttonTop = 104;
+            int gap = 10;
+            int x = ClientSize.Width - right;
+
+            if (btnStockIn.Visible)
+            {
+                btnStockIn.Location = new Point(x - btnStockIn.Width, buttonTop);
+                x = btnStockIn.Left - gap;
+            }
+
+            btnReload.Location = new Point(x - btnReload.Width, buttonTop);
+            x = btnReload.Left - gap;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
+
+            dgvLowStock.SetBounds(
+                left,
+                155,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 175));
         }
     }
 }

@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using SmartPOS.WinForms.Common.Session;
+using SmartPOS.WinForms.UI.Helpers;
 
 namespace SmartPOS.WinForms.UI.Forms.Invoices
 {
@@ -94,6 +95,7 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvDetails);
 
             lblTongTien = new Label
             {

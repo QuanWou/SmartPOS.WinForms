@@ -7,6 +7,7 @@ using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Invoices
@@ -178,6 +179,7 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvInvoices);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblSubtitle);
@@ -195,6 +197,7 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             this.Controls.Add(dgvInvoices);
 
             this.Load += FrmInvoices_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmInvoices_Load(object sender, EventArgs e)
@@ -210,6 +213,7 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
 
             dtpFromDate.Value = DateTime.Today.AddMonths(-1);
             dtpToDate.Value = DateTime.Today;
+            UpdateResponsiveLayout();
         }
 
         private void LoadStatusFilter()
@@ -406,6 +410,29 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
                 DataPropertyName = "TrangThai",
                 Width = 130
             });
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int buttonTop = 104;
+            int gap = 10;
+            int x = ClientSize.Width - right;
+
+            btnViewDetail.Location = new Point(x - btnViewDetail.Width, buttonTop);
+            x = btnViewDetail.Left - gap;
+
+            btnReload.Location = new Point(x - btnReload.Width, buttonTop);
+            x = btnReload.Left - gap;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
+
+            dgvInvoices.SetBounds(
+                left,
+                155,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 175));
         }
 
         private class ComboBoxItem

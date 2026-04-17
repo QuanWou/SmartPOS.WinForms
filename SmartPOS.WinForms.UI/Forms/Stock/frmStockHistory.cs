@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
@@ -161,6 +162,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvStockHistory);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblSubtitle);
@@ -176,6 +178,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             this.Controls.Add(dgvStockHistory);
 
             this.Load += FrmStockHistory_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmStockHistory_Load(object sender, EventArgs e)
@@ -184,6 +187,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             dtpToDate.Value = DateTime.Today;
 
             LoadData();
+            UpdateResponsiveLayout();
         }
 
         private void LoadData()
@@ -334,6 +338,29 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             txtKeyword.Clear();
             SearchStockHistory();
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int buttonTop = 104;
+            int gap = 10;
+            int x = ClientSize.Width - right;
+
+            btnViewDetail.Location = new Point(x - btnViewDetail.Width, buttonTop);
+            x = btnViewDetail.Left - gap;
+
+            btnReload.Location = new Point(x - btnReload.Width, buttonTop);
+            x = btnReload.Left - gap;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
+
+            dgvStockHistory.SetBounds(
+                left,
+                155,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 175));
         }
     }
 }

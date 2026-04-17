@@ -7,6 +7,7 @@ using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
@@ -158,6 +159,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvProducts);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblSubtitle);
@@ -172,6 +174,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             this.Controls.Add(dgvProducts);
 
             this.Load += FrmExpiredProducts_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmExpiredProducts_Load(object sender, EventArgs e)
@@ -180,6 +183,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             _categories = _categoryService.GetAll().ToList();
             LoadFilter();
             LoadIssues();
+            UpdateResponsiveLayout();
         }
 
         private void ApplyRoleAccess()
@@ -491,6 +495,38 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
             txtKeyword.Clear();
             BindGrid(BuildIssueRows());
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int buttonTop = 103;
+            int gap = 10;
+            int x = ClientSize.Width - right;
+
+            if (btnRestore.Visible)
+            {
+                btnRestore.Location = new Point(x - btnRestore.Width, buttonTop);
+                x = btnRestore.Left - gap;
+            }
+
+            if (btnEdit.Visible)
+            {
+                btnEdit.Location = new Point(x - btnEdit.Width, buttonTop);
+                x = btnEdit.Left - gap;
+            }
+
+            btnReload.Location = new Point(x - btnReload.Width, buttonTop);
+            x = btnReload.Left - gap;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
+
+            dgvProducts.SetBounds(
+                left,
+                150,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 170));
         }
 
         private string GetCategoryName(int maLoai)

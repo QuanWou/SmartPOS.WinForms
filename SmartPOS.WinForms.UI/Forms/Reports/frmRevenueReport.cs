@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
+using SmartPOS.WinForms.UI.Helpers;
 
 namespace SmartPOS.WinForms.UI.Forms.Reports
 {
@@ -220,6 +221,7 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
                 DataPropertyName = "GhiChu",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
+            UiGridHelper.ApplyResponsiveStyle(dgvRevenue);
         }
 
         private void RecalcLayout()

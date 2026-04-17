@@ -253,7 +253,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
                 return;
             }
 
-            SubmitSearch();
+            SubmitSearch(true);
             e.Handled = true;
             e.SuppressKeyPress = true;
         }
@@ -280,10 +280,10 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         private void SearchTimer_Tick(object sender, EventArgs e)
         {
             _searchTimer.Stop();
-            SubmitSearch();
+            SubmitSearch(false);
         }
 
-        private void SubmitSearch()
+        private void SubmitSearch(bool force)
         {
             string keyword = _searchBox.Text?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(keyword))
@@ -291,7 +291,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
                 return;
             }
 
-            if (string.Equals(_lastSubmittedKeyword, keyword, StringComparison.OrdinalIgnoreCase))
+            if (!force && string.Equals(_lastSubmittedKeyword, keyword, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }

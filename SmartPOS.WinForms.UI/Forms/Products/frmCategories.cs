@@ -7,6 +7,7 @@ using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
@@ -150,6 +151,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             dgvCategories.SelectionChanged += DgvCategories_SelectionChanged;
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvCategories);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblTenLoai);
@@ -164,6 +166,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             this.Controls.Add(dgvCategories);
 
             this.Load += FrmCategories_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void BuildGridColumns()
@@ -205,6 +208,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         {
             LoadCategories();
             ResetForm();
+            UpdateResponsiveLayout();
         }
 
         private void LoadCategories()
@@ -337,6 +341,25 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             chkTrangThai.Checked = true;
             txtTenLoai.Focus();
             dgvCategories.ClearSelection();
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int statusLeft = Math.Max(640, ClientSize.Width - 180);
+
+            lblTrangThai.Location = new Point(statusLeft, 70);
+            chkTrangThai.Location = new Point(statusLeft, 95);
+
+            int moTaWidth = Math.Max(220, statusLeft - txtMoTa.Left - 20);
+            txtMoTa.Width = moTaWidth;
+
+            dgvCategories.SetBounds(
+                left,
+                190,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 210));
         }
     }
 }

@@ -8,6 +8,7 @@ using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Constants;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Users
@@ -172,6 +173,7 @@ namespace SmartPOS.WinForms.UI.Forms.Users
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvUsers);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblSubtitle);
@@ -188,6 +190,7 @@ namespace SmartPOS.WinForms.UI.Forms.Users
             this.Controls.Add(dgvUsers);
 
             this.Load += FrmUsers_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmUsers_Load(object sender, EventArgs e)
@@ -202,6 +205,7 @@ namespace SmartPOS.WinForms.UI.Forms.Users
             LoadRoleFilter();
             LoadStatusFilter();
             LoadUsers();
+            UpdateResponsiveLayout();
         }
 
         private void LoadRoleFilter()
@@ -412,6 +416,32 @@ namespace SmartPOS.WinForms.UI.Forms.Users
                 DataPropertyName = "TrangThaiText",
                 Width = 120
             });
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int buttonTop = 104;
+            int gap = 10;
+            int x = ClientSize.Width - right;
+
+            btnEdit.Location = new Point(x - btnEdit.Width, buttonTop);
+            x = btnEdit.Left - gap;
+
+            btnAdd.Location = new Point(x - btnAdd.Width, buttonTop);
+            x = btnAdd.Left - gap;
+
+            btnReload.Location = new Point(x - btnReload.Width, buttonTop);
+            x = btnReload.Left - gap;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
+
+            dgvUsers.SetBounds(
+                left,
+                155,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 175));
         }
 
         private class ComboBoxItem

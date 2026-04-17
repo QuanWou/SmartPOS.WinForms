@@ -85,12 +85,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Forms\Aulh\frmLogin.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\Dashboard\frmDashboard.cs">
-      <SubType>Form</SubType>
-    </Compile>
+    <Compile Include="Forms\Aulh\frmLogin.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Helpers\UiGridHelper.cs" />
+    <Compile Include="Forms\Dashboard\frmDashboard.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\Invoices\frmInvoiceDetails.cs">
       <SubType>Form</SubType>
     </Compile>

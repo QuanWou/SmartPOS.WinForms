@@ -321,6 +321,11 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return;
             }
 
+            if (TryOpenGlobalSearchResults(trimmed))
+            {
+                return;
+            }
+
             MessageBox.Show(
                 "Không tìm thấy chức năng phù hợp. Hãy thử từ khóa như sản phẩm, hóa đơn, nhập kho hoặc POS.",
                 "Tìm kiếm trên thanh trên cùng");
@@ -642,6 +647,37 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         private void LoadPageFromQuickSearch(Form page)
         {
             LoadPage(page);
+        }
+
+        private bool TryOpenGlobalSearchResults(string keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword))
+            {
+                return false;
+            }
+
+            _lastQuickSearchTerm = keyword.Trim();
+
+            if (!SessionManager.IsStaff && ContainsKeyword(NormalizeKeyword(keyword), "nhan vien", "tai khoan", "so dien thoai", "user"))
+            {
+                LoadPage(new frmUsers(), true);
+                return true;
+            }
+
+            if (ContainsKeyword(NormalizeKeyword(keyword), "hoa don", "thanh toan", "invoice"))
+            {
+                LoadPage(new frmInvoices(), true);
+                return true;
+            }
+
+            if (!SessionManager.IsStaff && ContainsKeyword(NormalizeKeyword(keyword), "nhap kho", "phieu nhap", "stock"))
+            {
+                LoadPage(new frmStockHistory(), true);
+                return true;
+            }
+
+            LoadPage(new frmProducts(), true);
+            return true;
         }
 
         private bool ContainsKeyword(string normalizedSource, params string[] keywords)

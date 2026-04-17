@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.UI.Helpers;
 
 namespace SmartPOS.WinForms.UI.Forms.Stock
 {
@@ -90,6 +91,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvDetails);
 
             lblTongTien = new Label
             {

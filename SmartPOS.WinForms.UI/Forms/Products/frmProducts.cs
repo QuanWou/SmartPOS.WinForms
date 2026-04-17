@@ -9,6 +9,7 @@ using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Helpers;
 using SmartPOS.WinForms.UI.Interfaces;
 
 namespace SmartPOS.WinForms.UI.Forms.Products
@@ -166,6 +167,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             };
 
             BuildGridColumns();
+            UiGridHelper.ApplyResponsiveStyle(dgvProducts);
 
             this.Controls.Add(lblTitle);
             this.Controls.Add(lblKeyword);
@@ -181,6 +183,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             this.Controls.Add(dgvProducts);
 
             this.Load += FrmProducts_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void BuildGridColumns()
@@ -274,6 +277,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             LoadCategoryFilter();
             LoadStatusFilter();
             LoadProducts();
+            UpdateResponsiveLayout();
         }
 
         private void ApplyRoleAccess()
@@ -448,6 +452,38 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         {
             var category = _categories?.FirstOrDefault(x => x.MaLoai == maLoai);
             return category != null ? category.TenLoai : string.Empty;
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            int left = 20;
+            int right = 20;
+            int buttonTop = 90;
+            int gap = 10;
+            int x = ClientSize.Width - right;
+
+            if (btnEdit.Visible)
+            {
+                btnEdit.Location = new Point(x - btnEdit.Width, buttonTop);
+                x = btnEdit.Left - gap;
+            }
+
+            if (btnAdd.Visible)
+            {
+                btnAdd.Location = new Point(x - btnAdd.Width, buttonTop);
+                x = btnAdd.Left - gap;
+            }
+
+            btnReload.Location = new Point(x - btnReload.Width, buttonTop);
+            x = btnReload.Left - gap;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
+
+            dgvProducts.SetBounds(
+                left,
+                140,
+                Math.Max(320, ClientSize.Width - left - right),
+                Math.Max(220, ClientSize.Height - 160));
         }
 
         private class ComboBoxItem
