@@ -104,12 +104,13 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
         }
     }
-
+    public enum RevenueChartType { Line, Bar }
     // ═══════════════════════════════════════════════════════
     //  Revenue Bar Chart  —  Monochrome Light
     // ═══════════════════════════════════════════════════════
     public class UcRevenueChart : UserControl
     {
+        public RevenueChartType ChartType { get; set; } = RevenueChartType.Bar;
         private List<RevenueChartItemResponse> _items;
         private string _totalLabel = "0 đ";
         private string _badgeLabel = "+0% so với 7 ngày trước";
@@ -121,7 +122,6 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             BackColor = Palette.BgPage;
             _items = CreateFallbackData();
             Resize += (s, e) => Invalidate();
-            Paint += OnPaint;
         }
 
         public void SetData(
@@ -143,38 +143,63 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             Invalidate();
         }
 
-        private void OnPaint(object sender, PaintEventArgs e)
+        // --- PHẦN 1: PHƯƠNG THỨC ONPAINT CHÍNH ---
+        protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             GdiHelper.SetQuality(g);
+
             int W = Width, H = Height;
             if (W < 20 || H < 20) return;
 
+            // 1. Vẽ nền Card
             GdiHelper.DrawCard(g, W, H);
 
-            // ── Header ────────────────────────────────────
-            using var fLabel = new Font("Segoe UI", 9f, FontStyle.Regular);
-            using var fValue = new Font("Segoe UI", 15f, FontStyle.Bold);
-            using var fSub = new Font("Segoe UI", 8.5f, FontStyle.Regular);
-            using var bNavy = new SolidBrush(Palette.Navy);
-            using var bMid = new SolidBrush(Palette.NavyMid);
-            bool positive = !_badgeLabel.StartsWith("-");
-            Color badgeTextColor = positive ? Palette.PositiveText : Color.FromArgb(170, 70, 70);
-            Color badgeBackColor = positive ? Palette.PositiveBg : Color.FromArgb(24, 170, 70, 70);
+            // 2. Vẽ Header (Tiêu đề, Tổng tiền, Badge)
+            DrawHeader(g);
 
-            g.DrawString("Doanh thu", fLabel, bMid, 18f, 14f);
-            g.DrawString(_totalLabel, fValue, bNavy, 18f, 32f);
-
-            GdiHelper.DrawBadge(g, _badgeLabel, fSub,
-                                badgeTextColor, badgeBackColor,
-                                18f, 60f);
-
-            // ── Chart area ────────────────────────────────
+            // 3. Xác định vùng vẽ biểu đồ (Chart Area)
             int cL = 42, cR = W - 14, cT = 90, cB = H - 28;
             if (cR <= cL || cB <= cT) return;
             int cW = cR - cL, cH = cB - cT;
 
-            // Grid lines + Y labels
+            // 4. Vẽ lưới và nhãn trục Y
+            DrawGridAndAxisY(g, cL, cR, cB, cH);
+
+            if (_items == null || _items.Count == 0) return;
+
+            // 5. Tính toán slotW và Render theo ChartType
+            bool isBar = this.ChartType == RevenueChartType.Bar;
+            float slotW = isBar
+                ? (float)cW / Math.Max(1, _items.Count)
+                : (float)cW / Math.Max(1, _items.Count - 1);
+            if (isBar)
+                RenderBarChart(g, cL, cB, cH, slotW);
+            else
+                RenderLineChart(g, cL, cT, cB, cH, slotW);
+        }
+
+        // --- PHẦN 2: CÁC HÀM BỔ TRỢ (Dán bên dưới OnPaint) ---
+
+        private void DrawHeader(Graphics g)
+        {
+            using var fLabel = new Font("Segoe UI", 9f);
+            using var fValue = new Font("Segoe UI", 15f, FontStyle.Bold);
+            using var fSub = new Font("Segoe UI", 8.5f);
+            using var bNavy = new SolidBrush(Palette.Navy);
+            using var bMid = new SolidBrush(Palette.NavyMid);
+
+            bool positive = !_badgeLabel.StartsWith("-");
+            Color textColor = positive ? Palette.PositiveText : Color.FromArgb(170, 70, 70);
+            Color bgColor = positive ? Palette.PositiveBg : Color.FromArgb(24, 170, 70, 70);
+
+            g.DrawString("Doanh thu", fLabel, bMid, 18f, 14f);
+            g.DrawString(_totalLabel, fValue, bNavy, 18f, 32f);
+            GdiHelper.DrawBadge(g, _badgeLabel, fSub, textColor, bgColor, 18f, 60f);
+        }
+
+        private void DrawGridAndAxisY(Graphics g, int cL, int cR, int cB, int cH)
+        {
             decimal[] ySteps = GetAxisSteps();
             using var gridPen = new Pen(Palette.GridLine, 1f);
             using var fTick = new Font("Segoe UI", 6.5f);
@@ -184,66 +209,71 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             {
                 float yp = cB - (float)(yv / _maxValue) * cH;
                 g.DrawLine(gridPen, cL, yp, cR, yp);
-                string lbl = FormatCompact(yv);
-                g.DrawString(lbl, fTick, bTick, 2f, yp - 8f);
+                g.DrawString(FormatCompact(yv), fTick, bTick, 2f, yp - 8f);
             }
+        }
 
-            if (_items.Count == 1)
+        private void RenderBarChart(Graphics g, int cL, int cB, int cH, float slotW)
+        {
+            float barWidth = Math.Min(20f, slotW * 0.6f); using var bBar = new SolidBrush(Palette.AccentMid);
+            using var fDate = new Font("Segoe UI", 6.5f);
+            using var bDate = new SolidBrush(Palette.NavyLight);
+
+            for (int i = 0; i < _items.Count; i++)
             {
-                _items.Add(new RevenueChartItemResponse
+                float xCenter = cL + (i + 0.5f) * slotW;
+                float barH = (float)(_items[i].DoanhThu / _maxValue) * cH;
+
+                if (barH > 0)
                 {
-                    Ngay = _items[0].Ngay.AddDays(1),
-                    DoanhThu = _items[0].DoanhThu
-                });
+                    var rect = new RectangleF(xCenter - barWidth / 2f, cB - barH, barWidth, barH);
+                    using var path = GdiHelper.RoundedTop(rect, 4);
+                    g.FillPath(bBar, path);
+                }
+                DrawXLabel(g, _items[i].Ngay, xCenter, cB, fDate, bDate);
             }
+        }
 
-            float slotW = _items.Count > 1
-                ? (float)cW / (_items.Count - 1)
-                : cW;
+        private void RenderLineChart(Graphics g, int cL, int cT, int cB, int cH, float slotW)
+        {
+            using var fDate = new Font("Segoe UI", 6.5f);
+            using var bDate = new SolidBrush(Palette.NavyLight);
 
-            using var fMonth = new Font("Segoe UI", 6.5f);
-            using var bMonth = new SolidBrush(Palette.NavyLight);
-            using var fillBrush = new LinearGradientBrush(
-                new PointF(cL, cT),
-                new PointF(cL, cB),
-                Color.FromArgb(60, Palette.AccentMid),
-                Color.FromArgb(0, Palette.AccentMid));
-            using var linePen = new Pen(Palette.AccentMid, 2.5f)
-            {
-                StartCap = LineCap.Round,
-                EndCap = LineCap.Round,
-                LineJoin = LineJoin.Round
-            };
-            using var pointBrush = new SolidBrush(Palette.AccentDark);
-            using var pointPen = new Pen(Color.White, 2f);
+            PointF[] points = _items.Select((x, i) => new PointF(
+                cL + i * slotW,
+                cB - (float)(x.DoanhThu / _maxValue) * cH)).ToArray();
 
-            PointF[] points = _items
-                .Select((x, index) => new PointF(
-                    cL + index * slotW,
-                    cB - (float)(x.DoanhThu / _maxValue) * cH))
-                .ToArray();
+            if (points.Length < 2) return;
 
-            if (points.Length >= 2)
+            using (var fillBrush = new LinearGradientBrush(new Rectangle(cL, cT, Width, cH + 20),
+                   Color.FromArgb(60, Palette.AccentMid), Color.Transparent, 90f))
             {
                 PointF[] fillPoints = new PointF[points.Length + 2];
                 fillPoints[0] = new PointF(points[0].X, cB);
                 Array.Copy(points, 0, fillPoints, 1, points.Length);
                 fillPoints[fillPoints.Length - 1] = new PointF(points[points.Length - 1].X, cB);
-
                 g.FillPolygon(fillBrush, fillPoints);
-                g.DrawLines(linePen, points);
+            }
+
+            using var linePen = new Pen(Palette.AccentMid, 2.5f) { LineJoin = LineJoin.Round };
+            g.DrawLines(linePen, points);
+
+            using var pBrush = new SolidBrush(Palette.AccentDark);
+            foreach (var p in points)
+            {
+                g.FillEllipse(pBrush, p.X - 3.5f, p.Y - 3.5f, 7f, 7f);
+                g.DrawEllipse(Pens.White, p.X - 3.5f, p.Y - 3.5f, 7f, 7f);
             }
 
             for (int i = 0; i < points.Length; i++)
-            {
-                g.FillEllipse(pointBrush, points[i].X - 4f, points[i].Y - 4f, 8f, 8f);
-                g.DrawEllipse(pointPen, points[i].X - 4f, points[i].Y - 4f, 8f, 8f);
+                DrawXLabel(g, _items[i].Ngay, points[i].X, cB, fDate, bDate);
+        }
 
-                string label = _items[i].Ngay.ToString("dd/MM", CultureInfo.InvariantCulture);
-                var mSz = g.MeasureString(label, fMonth);
-                g.DrawString(label, fMonth, bMonth,
-                             points[i].X - mSz.Width / 2f, cB + 4f);
-            }
+        private void DrawXLabel(Graphics g, DateTime date, float x, float cB, Font f, Brush b)
+        {
+            string txt = date.ToString("dd/MM");
+            var sz = g.MeasureString(txt, f);
+            g.DrawString(txt, f, b, x - sz.Width / 2f, cB + 4f);
         }
 
         private List<RevenueChartItemResponse> CreateFallbackData()
@@ -260,16 +290,11 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
 
         private decimal NormalizeMaxValue(decimal maxRevenue)
         {
-            if (maxRevenue <= 0)
-            {
-                return 100000m;
-            }
+            if (maxRevenue <= 0) return 1000m;
 
-            decimal step = 100000m;
+            decimal step = 1m;
             while (maxRevenue / step > 10m)
-            {
                 step *= 10m;
-            }
 
             return Math.Ceiling(maxRevenue / step) * step;
         }
@@ -336,7 +361,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             g.DrawString("C\u00f4ng ty", fTitle, bNavy, 16f, 14f);
 
             // Badge "+6%" — right‑aligned, no emoji
-            string badgeText = "+6%";
+            string badgeText = "+6%  5 c\u00f4ng ty so v\u1edbi th\u00e1ng tr\u01b0\u1edbc";
             var badgeSz = g.MeasureString(badgeText, fBadge);
             float badgeX = W - badgeSz.Width - 28f;
             GdiHelper.DrawBadge(g, badgeText, fBadge,
@@ -400,11 +425,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
                              pairCx - dSz.Width / 2f, cB + 4f);
             }
 
-            // Footer note
-            using var fNote = new Font("Segoe UI", 8f);
-            using var bPos = new SolidBrush(Palette.PositiveText);
-            g.DrawString("+6%  5 c\u00f4ng ty so v\u1edbi th\u00e1ng tr\u01b0\u1edbc",
-                         fNote, bPos, 14f, H - 24f);
+            
         }
     }
 
