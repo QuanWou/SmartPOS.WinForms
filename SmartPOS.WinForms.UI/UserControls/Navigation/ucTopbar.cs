@@ -34,7 +34,9 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         private Button _btnBell;
         private Button _btnSettings;
         private Button _btnAvatar;
+        private Label _lblBellBadge;
         private string _titleText = "Dashboard";
+        private int _notificationCount;
         private bool _allowAddNew = true;
         private bool _suppressSearchClearedEvent;
         private readonly Timer _searchTimer;
@@ -98,9 +100,24 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             }
         }
 
+        public int NotificationCount
+        {
+            get { return _notificationCount; }
+            set
+            {
+                _notificationCount = Math.Max(0, value);
+                UpdateBellBadge();
+            }
+        }
+
         public void ClearSearch(bool suppressEvent = false)
         {
             SetSearchText(string.Empty, suppressEvent);
+        }
+
+        public void FocusSearch()
+        {
+            _searchBox?.FocusInput();
         }
 
         public void SetSearchText(string value, bool suppressEvent = true)
@@ -202,6 +219,18 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             _btnBell = MakeIconButton("🔔");
             _btnBell.Click += (s, e) => BtnBellClicked?.Invoke(_btnBell, e);
             _toolTip.SetToolTip(_btnBell, "Xem cảnh báo và thông báo hệ thống.");
+
+            _lblBellBadge = new Label
+            {
+                AutoSize = false,
+                Size = new Size(18, 18),
+                BackColor = Color.FromArgb(220, 70, 70),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI Semibold", 7F, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Visible = false
+            };
+
             _btnSettings = MakeIconButton("⚙");
             _btnSettings.Click += (s, e) => BtnSettingsClicked?.Invoke(_btnSettings, e);
             _toolTip.SetToolTip(_btnSettings, "Mở các thao tác nhanh.");
@@ -211,7 +240,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
             p.Controls.AddRange(new Control[]
             {
-                _btnAvatar, _btnBell, _btnSettings, _btnPOS, _btnAdd
+                _btnAvatar, _btnBell, _btnSettings, _btnPOS, _btnAdd, _lblBellBadge
             });
             UpdateRightPanelLayout();
         }
@@ -249,11 +278,30 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             }
 
             _rightPanel.Width = x;
+            UpdateBellBadge();
             if (IsHandleCreated)
             {
                 RepositionControls();
                 Invalidate();
             }
+        }
+
+        private void UpdateBellBadge()
+        {
+            if (_lblBellBadge == null || _btnBell == null)
+            {
+                return;
+            }
+
+            _lblBellBadge.Visible = _notificationCount > 0;
+            _lblBellBadge.Text = _notificationCount > 99 ? "99+" : _notificationCount.ToString();
+            _lblBellBadge.Location = new Point(_btnBell.Right - 11, _btnBell.Top - 3);
+            _lblBellBadge.BringToFront();
+            ApplyRoundedRegion(_lblBellBadge, _lblBellBadge.Height / 2);
+            _toolTip?.SetToolTip(_btnBell,
+                _notificationCount > 0
+                    ? "Có " + _notificationCount + " cảnh báo cần xem."
+                    : "Xem cảnh báo và thông báo hệ thống.");
         }
 
         private void SearchBox_KeyDown(object sender, KeyEventArgs e)
@@ -527,6 +575,15 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
             LayoutInner();
             UpdateRegion();
+        }
+
+        public void FocusInput()
+        {
+            _inner.Focus();
+            if (_inner.ForeColor != PLACEHOLDER)
+            {
+                _inner.SelectAll();
+            }
         }
 
         private void SetPlaceholder()

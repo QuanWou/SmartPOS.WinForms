@@ -37,6 +37,11 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         public int CollapsedWidth { get; set; } = 64;
         public event EventHandler<string> MenuClicked;
 
+        public void ToggleCollapsed()
+        {
+            ToggleSidebar();
+        }
+
         // ── Menu data ─────────────────────────────────────────────────────
         private readonly List<(string Icon, string Text, string Key)> _items =
             new List<(string, string, string)>
@@ -311,6 +316,11 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         }
 
         private void BtnToggle_Click(object sender, EventArgs e)
+        {
+            ToggleSidebar();
+        }
+
+        private void ToggleSidebar()
         {
             _collapsed = !_collapsed;
             _animTimer?.Stop();

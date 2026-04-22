@@ -38,6 +38,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         // Track current page to avoid redundant reloads
         private Form _currentPage;
         private string _lastQuickSearchTerm;
+        private ContextMenuStrip _activeTopBarMenu;
         private readonly IInvoiceService _invoiceService;
         private readonly IProductService _productService;
         private readonly IProductLotService _productLotService;
@@ -295,6 +296,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             topBar.AvatarText = GetCurrentUserInitial();
             topBar.SearchPlaceholder = GetSearchPlaceholder(page);
             topBar.SetSearchText(_lastQuickSearchTerm, true);
+            UpdateTopBarNotificationCount();
         }
 
         private void TopBar_SearchSubmitted(object sender, string keyword)
@@ -397,52 +399,100 @@ namespace SmartPOS.WinForms.UI.Forms.Main
 
             try
             {
-                int lowStockCount = _productService.GetAll()
-                    .Count(x =>
-                        x.TrangThai &&
-                        x.SoLuongTon <= 10 &&
-                        (!x.HanSuDung.HasValue || x.HanSuDung.Value.Date >= DateTime.Today));
+                TopBarNotificationSummary summary = BuildNotificationSummary();
+                topBar.NotificationCount = summary.TotalAlertCount;
 
-                var lots = _productLotService.GetAll()
-                    .Where(x => x.SoLuongTonLo > 0)
-                    .ToList();
-
-                int expiredLots = lots.Count(x =>
-                    x.HanSuDung.HasValue &&
-                    x.HanSuDung.Value.Date < DateTime.Today);
-
-                int expiringSoonLots = lots.Count(x =>
-                    x.HanSuDung.HasValue &&
-                    x.HanSuDung.Value.Date >= DateTime.Today &&
-                    x.HanSuDung.Value.Date <= DateTime.Today.AddDays(7));
-
-                int todayInvoices = _invoiceService.GetAll()
-                    .Count(x =>
-                        x.NgayLap.Date == DateTime.Today &&
-                        (!SessionManager.IsStaff ||
-                         (SessionManager.CurrentUser != null && x.MaNV == SessionManager.CurrentUser.MaNV)));
+                AddMenuInfo(menu, "Cảnh báo cần xử lý: " + summary.TotalAlertCount);
+                AddMenuInfo(menu, "Doanh thu hôm nay: " + summary.TodayRevenue.ToString("N0") + " đ");
+                AddMenuInfo(menu, "Hóa đơn hôm nay: " + summary.TodayInvoices);
+                AddMenuSeparator(menu);
 
                 AddMenuAction(menu,
-                    "Sản phẩm sắp hết hàng: " + lowStockCount,
-                    () => LoadPage(new frmLowStock()));
+                    "Sản phẩm tồn kho thấp: " + summary.LowStockProducts,
+                    () => LoadPage(new frmLowStock()),
+                    summary.LowStockProducts > 0);
                 AddMenuAction(menu,
-                    "Lô hết hạn hoặc sắp hết hạn: " + (expiredLots + expiringSoonLots),
-                    () => LoadPage(new frmExpiredProducts()));
+                    "Lô đã hết hạn: " + summary.ExpiredLots,
+                    () => LoadPage(new frmExpiredProducts()),
+                    summary.ExpiredLots > 0);
                 AddMenuAction(menu,
-                    "Hóa đơn hôm nay: " + todayInvoices,
-                    () => LoadPage(new frmInvoices()));
+                    "Lô sắp hết hạn trong 7 ngày: " + summary.ExpiringSoonLots,
+                    () => LoadPage(new frmExpiredProducts()),
+                    summary.ExpiringSoonLots > 0);
+                AddMenuAction(menu,
+                    "Xem danh sách hóa đơn hôm nay",
+                    () => LoadPage(new frmInvoices()),
+                    summary.TodayInvoices > 0);
 
-                if (lowStockCount == 0 && expiredLots == 0 && expiringSoonLots == 0 && todayInvoices == 0)
+                AddMenuSeparator(menu);
+                AddMenuAction(menu, "Làm mới thông báo", UpdateTopBarNotificationCount);
+
+                if (summary.TotalAlertCount == 0)
                 {
-                    menu.Items.Add(CreateDisabledItem("Không có cảnh báo mới."));
+                    AddMenuInfo(menu, "Không có cảnh báo tồn kho/hạn sử dụng mới.");
                 }
             }
             catch (Exception ex)
             {
-                menu.Items.Add(CreateDisabledItem("Không tải được thông báo: " + ex.Message));
+                AddMenuInfo(menu, "Không tải được thông báo: " + ex.Message);
             }
 
             return menu;
+        }
+
+        private void UpdateTopBarNotificationCount()
+        {
+            if (topBar == null)
+            {
+                return;
+            }
+
+            try
+            {
+                topBar.NotificationCount = BuildNotificationSummary().TotalAlertCount;
+            }
+            catch
+            {
+                topBar.NotificationCount = 0;
+            }
+        }
+
+        private TopBarNotificationSummary BuildNotificationSummary()
+        {
+            DateTime today = DateTime.Today;
+            var products = _productService.GetAll().ToList();
+            var lots = _productLotService.GetAll()
+                .Where(x => x.SoLuongTonLo > 0 && x.TrangThaiSanPham)
+                .ToList();
+            var invoices = _invoiceService.GetAll().ToList();
+
+            if (SessionManager.IsStaff && SessionManager.CurrentUser != null)
+            {
+                invoices = invoices
+                    .Where(x => x.MaNV == SessionManager.CurrentUser.MaNV)
+                    .ToList();
+            }
+
+            return new TopBarNotificationSummary
+            {
+                LowStockProducts = products.Count(x =>
+                    x.TrangThai &&
+                    x.SoLuongTon <= 10 &&
+                    (!x.HanSuDung.HasValue || x.HanSuDung.Value.Date >= today)),
+                ExpiredLots = lots.Count(x =>
+                    x.HanSuDung.HasValue &&
+                    x.HanSuDung.Value.Date < today),
+                ExpiringSoonLots = lots.Count(x =>
+                    x.HanSuDung.HasValue &&
+                    x.HanSuDung.Value.Date >= today &&
+                    x.HanSuDung.Value.Date <= today.AddDays(7)),
+                TodayInvoices = invoices.Count(x => x.NgayLap.Date == today),
+                TodayRevenue = invoices
+                    .Where(x =>
+                        x.NgayLap.Date == today &&
+                        string.Equals(x.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase))
+                    .Sum(x => x.TongTien)
+            };
         }
 
         private ContextMenuStrip BuildSettingsMenu()
@@ -450,12 +500,17 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             ContextMenuStrip menu = CreateTopBarMenu();
             AddMenuHeader(menu, "Thao tác nhanh");
 
+            AddMenuInfo(menu, "Màn hình hiện tại: " + (topBar != null ? topBar.TitleText : string.Empty));
+            AddMenuSeparator(menu);
+            AddMenuAction(menu, "Đưa con trỏ vào ô tìm kiếm", () => topBar.FocusSearch());
             AddMenuAction(menu, "Làm mới màn hình hiện tại", ReloadCurrentPage);
             AddMenuAction(menu, "Xóa ô tìm kiếm", () =>
             {
                 _lastQuickSearchTerm = string.Empty;
                 topBar.ClearSearch();
             });
+            AddMenuAction(menu, "Thu gọn / mở rộng menu trái", () => sidebar.ToggleCollapsed());
+
             AddMenuHeader(menu, "Đi đến");
             AddMenuAction(menu, "Về tổng quan", () => LoadPage(new frmDashboard()));
             AddMenuAction(menu, "Mở POS", () => LoadPage(new frmPOS()));
@@ -471,6 +526,29 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 AddMenuAction(menu, "Mở lịch sử nhập kho", () => LoadPage(new frmStockHistory()));
                 AddMenuAction(menu, "Mở báo cáo", () => LoadPage(new frmReports()));
                 AddMenuAction(menu, "Mở người dùng", () => LoadPage(new frmUsers()));
+                AddMenuHeader(menu, "Tạo nhanh");
+                AddMenuAction(menu, "Thêm sản phẩm mới", () =>
+                {
+                    using (var frm = new frmProductEdit())
+                    {
+                        frm.ShowDialog(this);
+                        if (frm.IsSavedSuccessfully)
+                        {
+                            LoadPage(new frmProducts());
+                        }
+                    }
+                });
+                AddMenuAction(menu, "Thêm người dùng mới", () =>
+                {
+                    using (var frm = new frmUserEdit())
+                    {
+                        frm.ShowDialog(this);
+                        if (frm.IsSavedSuccessfully)
+                        {
+                            LoadPage(new frmUsers());
+                        }
+                    }
+                });
             }
 
             return menu;
@@ -485,15 +563,32 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             string userRole = SessionManager.CurrentUser != null
                 ? SessionManager.CurrentUser.Quyen
                 : string.Empty;
+            string userAccount = SessionManager.CurrentUser != null
+                ? SessionManager.CurrentUser.TaiKhoan
+                : string.Empty;
+            string phone = SessionManager.CurrentUser != null && !string.IsNullOrWhiteSpace(SessionManager.CurrentUser.SoDienThoai)
+                ? SessionManager.CurrentUser.SoDienThoai
+                : "-";
 
             AddMenuHeader(menu, userName);
+            if (!string.IsNullOrWhiteSpace(userAccount))
+            {
+                AddMenuInfo(menu, "Tài khoản: " + userAccount);
+            }
             if (!string.IsNullOrWhiteSpace(userRole))
             {
-                menu.Items.Add(CreateDisabledItem("Quyền: " + userRole));
+                AddMenuInfo(menu, "Quyền: " + userRole);
             }
+            AddMenuInfo(menu, "Số điện thoại: " + phone);
+            AddMenuSeparator(menu);
 
             AddMenuAction(menu, "Xem thông tin tài khoản", ShowCurrentUserProfile);
             AddMenuAction(menu, "Cập nhật thông tin cá nhân", EditCurrentUserProfile);
+            if (!SessionManager.IsStaff)
+            {
+                AddMenuAction(menu, "Quản lý người dùng", () => LoadPage(new frmUsers()));
+            }
+            AddMenuSeparator(menu);
             AddMenuAction(menu, "Đăng xuất", LogoutCurrentUser);
             AddMenuAction(menu, "Thoát ứng dụng", ExitApplication);
 
@@ -504,7 +599,11 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         {
             return new ContextMenuStrip
             {
-                ShowImageMargin = false
+                ShowImageMargin = false,
+                Font = new Font("Segoe UI", 9F),
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(40, 50, 80),
+                Padding = new Padding(6)
             };
         }
 
@@ -515,19 +614,45 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 menu.Items.Add(new ToolStripSeparator());
             }
 
-            menu.Items.Add(CreateDisabledItem(text));
+            menu.Items.Add(CreateDisabledItem(text, true));
             menu.Items.Add(new ToolStripSeparator());
         }
 
-        private ToolStripMenuItem CreateDisabledItem(string text)
+        private ToolStripMenuItem CreateDisabledItem(string text, bool isHeader = false)
         {
-            return new ToolStripMenuItem(text) { Enabled = false };
+            return new ToolStripMenuItem(text)
+            {
+                Enabled = false,
+                Font = new Font("Segoe UI", 9F, isHeader ? FontStyle.Bold : FontStyle.Regular),
+                ForeColor = isHeader ? Color.FromArgb(22, 32, 72) : Color.FromArgb(90, 100, 125)
+            };
         }
 
-        private void AddMenuAction(ContextMenuStrip menu, string text, Action action)
+        private void AddMenuInfo(ContextMenuStrip menu, string text)
         {
-            ToolStripMenuItem item = new ToolStripMenuItem(text);
-            item.Click += (s, e) => action();
+            menu.Items.Add(CreateDisabledItem(text));
+        }
+
+        private void AddMenuSeparator(ContextMenuStrip menu)
+        {
+            if (menu.Items.Count > 0 && !(menu.Items[menu.Items.Count - 1] is ToolStripSeparator))
+            {
+                menu.Items.Add(new ToolStripSeparator());
+            }
+        }
+
+        private void AddMenuAction(ContextMenuStrip menu, string text, Action action, bool enabled = true)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem(text)
+            {
+                Enabled = enabled
+            };
+
+            if (enabled)
+            {
+                item.Click += (s, e) => RunTopBarAction(action);
+            }
+
             menu.Items.Add(item);
         }
 
@@ -538,8 +663,97 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return;
             }
 
-            menu.Closed += (s, e) => menu.Dispose();
+            DisposeActiveTopBarMenu();
+            _activeTopBarMenu = menu;
+            menu.Closed += TopBarMenu_Closed;
+            menu.Disposed += TopBarMenu_Disposed;
             menu.Show(anchor, new Point(0, anchor.Height + 4));
+        }
+
+        private void TopBarMenu_Closed(object sender, ToolStripDropDownClosedEventArgs e)
+        {
+            ContextMenuStrip menu = sender as ContextMenuStrip;
+            if (menu == null)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(_activeTopBarMenu, menu))
+            {
+                _activeTopBarMenu = null;
+            }
+
+            // Dispose after WinForms finishes the drop-down close/click pipeline.
+            BeginInvokeIfPossible(() =>
+            {
+                if (!menu.IsDisposed)
+                {
+                    menu.Dispose();
+                }
+            });
+        }
+
+        private void TopBarMenu_Disposed(object sender, EventArgs e)
+        {
+            if (ReferenceEquals(_activeTopBarMenu, sender))
+            {
+                _activeTopBarMenu = null;
+            }
+        }
+
+        private void DisposeActiveTopBarMenu()
+        {
+            ContextMenuStrip menu = _activeTopBarMenu;
+            _activeTopBarMenu = null;
+
+            if (menu == null || menu.IsDisposed)
+            {
+                return;
+            }
+
+            menu.Closed -= TopBarMenu_Closed;
+            menu.Disposed -= TopBarMenu_Disposed;
+            menu.Dispose();
+        }
+
+        private void RunTopBarAction(Action action)
+        {
+            if (action == null)
+            {
+                return;
+            }
+
+            BeginInvokeIfPossible(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        "Không thực hiện được thao tác:\n" + ex.Message,
+                        "Lỗi thao tác",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+            });
+        }
+
+        private void BeginInvokeIfPossible(Action action)
+        {
+            if (action == null || IsDisposed)
+            {
+                return;
+            }
+
+            if (IsHandleCreated)
+            {
+                BeginInvoke(action);
+                return;
+            }
+
+            action();
         }
 
         private bool TryNavigateByQuickSearch(string keyword)
@@ -1231,6 +1445,24 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             }
         }
 
+        private class TopBarNotificationSummary
+        {
+            public int LowStockProducts { get; set; }
+
+            public int ExpiredLots { get; set; }
+
+            public int ExpiringSoonLots { get; set; }
+
+            public int TodayInvoices { get; set; }
+
+            public decimal TodayRevenue { get; set; }
+
+            public int TotalAlertCount
+            {
+                get { return LowStockProducts + ExpiredLots + ExpiringSoonLots; }
+            }
+        }
+
         // Placeholder page while real pages are not yet built
         private void NavigatePlaceholder(string pageName)
         {
@@ -1261,6 +1493,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         {
             if (disposing)
             {
+                DisposeActiveTopBarMenu();
                 _currentPage?.Dispose();
             }
             base.Dispose(disposing);
