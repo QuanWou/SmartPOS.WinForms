@@ -308,16 +308,16 @@ namespace SmartPOS.WinForms.UI.Forms.Main
 
             _lastQuickSearchTerm = trimmed;
 
-            if (_currentPage is IGlobalSearchHandler searchable)
-            {
-                searchable.ApplyGlobalSearch(trimmed);
-                return;
-            }
-
             if (TryNavigateByQuickSearch(trimmed))
             {
                 _lastQuickSearchTerm = string.Empty;
                 topBar.ClearSearch(true);
+                return;
+            }
+
+            if (_currentPage is IGlobalSearchHandler searchable)
+            {
+                searchable.ApplyGlobalSearch(trimmed);
                 return;
             }
 
@@ -550,43 +550,43 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return false;
             }
 
-            if (ContainsKeyword(normalized, "tong quan", "dashboard", "tong hop"))
+            if (MatchesQuickCommand(normalized, "tong quan", "dashboard", "tong hop"))
             {
                 LoadPageFromQuickSearch(new frmDashboard());
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "ban hang", "pos", "quay", "thanh toan"))
+            if (MatchesQuickCommand(normalized, "ban hang", "pos", "quay", "thanh toan"))
             {
                 LoadPageFromQuickSearch(new frmPOS());
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "hoa don", "invoice"))
+            if (MatchesQuickCommand(normalized, "hoa don", "invoice"))
             {
                 LoadPageFromQuickSearch(new frmInvoices());
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "san pham", "hang hoa", "ma vach"))
+            if (MatchesQuickCommand(normalized, "san pham", "hang hoa", "ma vach"))
             {
                 LoadPageFromQuickSearch(new frmProducts());
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "het han", "ngung ban", "lo het han"))
+            if (MatchesQuickCommand(normalized, "het han", "ngung ban", "lo het han"))
             {
                 LoadPageFromQuickSearch(new frmExpiredProducts());
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "sap het", "ton kho thap", "low stock"))
+            if (MatchesQuickCommand(normalized, "sap het", "ton kho thap", "low stock"))
             {
                 LoadPageFromQuickSearch(new frmLowStock());
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "lich su nhap", "stock history"))
+            if (MatchesQuickCommand(normalized, "lich su nhap", "stock history"))
             {
                 if (SessionManager.IsStaff)
                 {
@@ -597,7 +597,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "nhap kho", "phieu nhap", "stock in"))
+            if (MatchesQuickCommand(normalized, "nhap kho", "phieu nhap", "stock in"))
             {
                 if (SessionManager.IsStaff)
                 {
@@ -608,7 +608,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "danh muc", "loai hang", "category"))
+            if (MatchesQuickCommand(normalized, "danh muc", "loai hang", "category"))
             {
                 if (SessionManager.IsStaff)
                 {
@@ -619,7 +619,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "nguoi dung", "nhan vien", "tai khoan", "user"))
+            if (MatchesQuickCommand(normalized, "nguoi dung", "nhan vien", "tai khoan", "user"))
             {
                 if (SessionManager.IsStaff)
                 {
@@ -630,7 +630,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return true;
             }
 
-            if (ContainsKeyword(normalized, "bao cao", "doanh thu", "report"))
+            if (MatchesQuickCommand(normalized, "bao cao", "doanh thu", "report"))
             {
                 if (SessionManager.IsStaff)
                 {
@@ -657,27 +657,86 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             }
 
             _lastQuickSearchTerm = keyword.Trim();
+            string normalized = NormalizeKeyword(keyword);
 
-            if (!SessionManager.IsStaff && ContainsKeyword(NormalizeKeyword(keyword), "nhan vien", "tai khoan", "so dien thoai", "user"))
+            if (!SessionManager.IsStaff && ContainsKeyword(normalized, "nhan vien", "tai khoan", "so dien thoai", "user"))
             {
                 LoadPage(new frmUsers(), true);
                 return true;
             }
 
-            if (ContainsKeyword(NormalizeKeyword(keyword), "hoa don", "thanh toan", "invoice"))
+            if (ContainsKeyword(normalized, "hoa don", "invoice"))
             {
                 LoadPage(new frmInvoices(), true);
                 return true;
             }
 
-            if (!SessionManager.IsStaff && ContainsKeyword(NormalizeKeyword(keyword), "nhap kho", "phieu nhap", "stock"))
+            if (ContainsKeyword(normalized, "sap het", "ton kho thap", "low stock"))
+            {
+                LoadPage(new frmLowStock(), true);
+                return true;
+            }
+
+            if (ContainsKeyword(normalized, "het han", "ngung ban", "lo het han"))
+            {
+                LoadPage(new frmExpiredProducts(), true);
+                return true;
+            }
+
+            if (!SessionManager.IsStaff && ContainsKeyword(normalized, "nhap kho", "phieu nhap", "stock"))
             {
                 LoadPage(new frmStockHistory(), true);
                 return true;
             }
 
+            if (!SessionManager.IsStaff && ContainsKeyword(normalized, "danh muc", "loai hang", "category"))
+            {
+                LoadPage(new frmCategories(), true);
+                return true;
+            }
+
+            if (!SessionManager.IsStaff && ContainsKeyword(normalized, "bao cao", "doanh thu", "report"))
+            {
+                LoadPage(new frmReports(), true);
+                return true;
+            }
+
             LoadPage(new frmProducts(), true);
             return true;
+        }
+
+        private bool MatchesQuickCommand(string normalizedSource, params string[] commands)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedSource))
+            {
+                return false;
+            }
+
+            string[] prefixes =
+            {
+                string.Empty,
+                "mo ",
+                "xem ",
+                "vao ",
+                "den ",
+                "toi ",
+                "di den ",
+                "chuyen den "
+            };
+
+            foreach (string command in commands)
+            {
+                string normalizedCommand = NormalizeKeyword(command);
+                foreach (string prefix in prefixes)
+                {
+                    if (string.Equals(normalizedSource, prefix + normalizedCommand, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private bool ContainsKeyword(string normalizedSource, params string[] keywords)

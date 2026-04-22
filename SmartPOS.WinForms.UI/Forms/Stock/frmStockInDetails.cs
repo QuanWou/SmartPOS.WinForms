@@ -148,11 +148,13 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             this.Controls.Add(btnClose);
 
             this.Load += FrmStockInDetails_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmStockInDetails_Load(object sender, EventArgs e)
         {
             LoadStockInDetails();
+            UpdateResponsiveLayout();
         }
 
         private void BuildGridColumns()
@@ -249,6 +251,32 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         private void BtnClose_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            const int left = 20;
+            const int right = 20;
+            const int gridTop = 125;
+            int footerTop = Math.Max(475, ClientSize.Height - 125);
+
+            dgvDetails.SetBounds(
+                left,
+                gridTop,
+                Math.Max(400, ClientSize.Width - left - right),
+                Math.Max(220, footerTop - gridTop - 20));
+
+            int infoTop = dgvDetails.Bottom + 20;
+            lblTongTien.Location = new Point(left, infoTop);
+            lblTongTienValue.Location = new Point(left, infoTop + 25);
+            lblGhiChu.Location = new Point(260, infoTop);
+
+            btnClose.Location = new Point(ClientSize.Width - right - btnClose.Width, infoTop + 17);
+            txtGhiChu.SetBounds(
+                260,
+                infoTop + 22,
+                Math.Max(260, btnClose.Left - 20 - 260),
+                txtGhiChu.Height);
         }
     }
 }

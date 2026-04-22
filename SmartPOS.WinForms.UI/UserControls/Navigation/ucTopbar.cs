@@ -27,6 +27,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
         private Label _lblTitle;
         private RoundedSearchBox _searchBox;
+        private Button _btnSearch;
         private Panel _rightPanel;
         private Button _btnPOS;
         private Button _btnAdd;
@@ -158,7 +159,15 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
             _searchBox.InnerKeyDown += SearchBox_KeyDown;
             _searchBox.InnerTextChanged += SearchBox_TextChanged;
+            _searchBox.SearchIconClicked += (s, e) => SubmitSearch(true);
             _toolTip.SetToolTip(_searchBox, "Nhập từ khóa để tìm kiếm hoặc mở nhanh chức năng.");
+
+            _btnSearch = MakeIconButton("🔍");
+            _btnSearch.BackColor = ACCENT_DARK;
+            _btnSearch.ForeColor = Color.White;
+            _btnSearch.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 55, 100);
+            _btnSearch.Click += (s, e) => SubmitSearch(true);
+            _toolTip.SetToolTip(_btnSearch, "Tìm kiếm ngay trong màn hình hiện tại.");
 
             _rightPanel = new Panel
             {
@@ -170,6 +179,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
             this.Controls.Add(_lblTitle);
             this.Controls.Add(_searchBox);
+            this.Controls.Add(_btnSearch);
             this.Controls.Add(_rightPanel);
 
             this.Paint += TopBar_Paint;
@@ -313,14 +323,22 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
                 0);
 
             int searchLeft = _lblTitle.Right + 16;
-            int searchRight = _rightPanel.Left - 16;
-            int searchW = Math.Min(280, searchRight - searchLeft);
-            if (searchW > 60)
+            int searchRight = _rightPanel.Left - _btnSearch.Width - 24;
+            int searchW = Math.Min(340, searchRight - searchLeft);
+            bool showSearch = searchW > 120;
+
+            _searchBox.Visible = showSearch;
+            _btnSearch.Visible = showSearch;
+
+            if (showSearch)
             {
                 _searchBox.Width = searchW;
                 _searchBox.Location = new Point(
                     searchLeft + (searchRight - searchLeft - searchW) / 2,
                     (h - _searchBox.Height) / 2);
+                _btnSearch.Location = new Point(
+                    _searchBox.Right + 8,
+                    (h - _btnSearch.Height) / 2);
             }
         }
 
@@ -427,6 +445,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
 
         public event KeyEventHandler InnerKeyDown;
         public event EventHandler InnerTextChanged;
+        public event EventHandler SearchIconClicked;
 
         public string PlaceholderText
         {
@@ -504,6 +523,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             this.Resize += (s, e) => { LayoutInner(); UpdateRegion(); };
             this.Paint += SearchBox_Paint;
             this.Click += (s, e) => _inner.Focus();
+            this.MouseDown += SearchBox_MouseDown;
 
             LayoutInner();
             UpdateRegion();
@@ -519,6 +539,17 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         {
             _inner.Location = new Point(30, (this.Height - _inner.Height) / 2);
             _inner.Width = this.Width - 38;
+        }
+
+        private void SearchBox_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (new Rectangle(0, 0, 32, Height).Contains(e.Location))
+            {
+                SearchIconClicked?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            _inner.Focus();
         }
 
         private void UpdateRegion()

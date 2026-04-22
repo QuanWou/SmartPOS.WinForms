@@ -136,7 +136,7 @@ namespace SmartPOS.WinForms.UI.UserControls.Dashboard
             _items = normalized.Count == 0 ? CreateFallbackData() : normalized;
             _totalLabel = string.IsNullOrWhiteSpace(totalLabel) ? "0 đ" : totalLabel;
             _badgeLabel = string.IsNullOrWhiteSpace(badgeLabel)
-                ? "+0% so với 7 ngày trước"
+                ? "+50% so với 7 ngày trước"
                 : badgeLabel;
             _maxValue = NormalizeMaxValue(_items.Max(x => x.DoanhThu));
 

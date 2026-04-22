@@ -165,11 +165,13 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             this.Controls.Add(btnClose);
 
             this.Load += FrmInvoiceDetails_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmInvoiceDetails_Load(object sender, EventArgs e)
         {
             LoadInvoiceDetails();
+            UpdateResponsiveLayout();
         }
 
         private void BuildGridColumns()
@@ -274,6 +276,33 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
         private void BtnClose_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            const int left = 20;
+            const int right = 20;
+            const int gridTop = 125;
+            int footerTop = Math.Max(475, ClientSize.Height - 125);
+
+            dgvDetails.SetBounds(
+                left,
+                gridTop,
+                Math.Max(400, ClientSize.Width - left - right),
+                Math.Max(220, footerTop - gridTop - 20));
+
+            int infoTop = dgvDetails.Bottom + 20;
+            lblTongTien.Location = new Point(left, infoTop);
+            lblTongTienValue.Location = new Point(left, infoTop + 25);
+            lblGhiChu.Location = new Point(260, infoTop);
+
+            btnClose.Location = new Point(ClientSize.Width - right - btnClose.Width, infoTop + 17);
+            btnPrint.Location = new Point(btnClose.Left - 10 - btnPrint.Width, infoTop + 17);
+            txtGhiChu.SetBounds(
+                260,
+                infoTop + 22,
+                Math.Max(220, btnPrint.Left - 20 - 260),
+                txtGhiChu.Height);
         }
     }
 }

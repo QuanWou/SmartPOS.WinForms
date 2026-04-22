@@ -28,16 +28,27 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         private Panel pnlLeft;
         private Panel pnlRight;
         private Panel pnlFooter;
+        private Panel pnlLineEditor;
 
         private Label lblTitle;
         private Label lblSubtitle;
         private Label lblSearch;
+        private Label lblSelectedProduct;
+        private Label lblQuantity;
+        private Label lblPrice;
 
         private TextBox txtSearch;
+        private NumericUpDown nudQuantity;
+        private NumericUpDown nudPrice;
+        private CheckBox chkUseExpiry;
+        private DateTimePicker dtpExpiry;
         private Button btnSearch;
         private Button btnCameraScan;
         private Button btnPhoneScan;
         private Button btnAddItem;
+        private Button btnUpdateItem;
+        private Button btnDeleteItem;
+        private Button btnClearItem;
         private Button btnSave;
 
         private DataGridView dgvProducts;
@@ -50,6 +61,9 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private List<ProductDTO> _products;
         private List<StockInDetailDTO> _stockInItems;
+        private int? _selectedProductId;
+        private Guid? _editingLineId;
+        private bool _suppressProductSelectionChanged;
 
         public frmStockIn()
             : this(null, false)
@@ -77,6 +91,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             BuildLayout();
             this.Load += FrmStockIn_Load;
+            this.Resize += (s, e) => UpdateResponsiveLayout();
         }
 
         private void FrmStockIn_Load(object sender, EventArgs e)
@@ -90,7 +105,9 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             LoadProducts();
             RefreshStockInDetailsView();
+            ClearLineEditor();
             ApplyInitialProductSelection();
+            UpdateResponsiveLayout();
         }
 
         private void BuildLayout()
@@ -98,7 +115,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             pnlHeader = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 100,
+                Height = 184,
                 BackColor = Color.White,
                 Padding = new Padding(20, 16, 20, 12)
             };
@@ -171,18 +188,6 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             btnPhoneScan.FlatAppearance.BorderSize = 0;
             btnPhoneScan.Click += BtnPhoneScan_Click;
 
-            btnAddItem = new Button
-            {
-                Text = "Thêm vào phiếu",
-                Location = new Point(660, 62),
-                Size = new Size(110, 30),
-                BackColor = Color.FromArgb(90, 110, 200),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            btnAddItem.FlatAppearance.BorderSize = 0;
-            btnAddItem.Click += BtnAddItem_Click;
-
             pnlHeader.Controls.Add(lblTitle);
             pnlHeader.Controls.Add(lblSubtitle);
             pnlHeader.Controls.Add(lblSearch);
@@ -190,7 +195,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             pnlHeader.Controls.Add(btnSearch);
             pnlHeader.Controls.Add(btnCameraScan);
             pnlHeader.Controls.Add(btnPhoneScan);
-            pnlHeader.Controls.Add(btnAddItem);
+            BuildLineEditorPanel();
+            pnlHeader.Controls.Add(pnlLineEditor);
 
             pnlLeft = new Panel
             {
@@ -239,14 +245,15 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Text = "Danh sách sản phẩm",
                 Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(22, 32, 72),
-                AutoSize = true,
-                Location = new Point(14, 12)
+                AutoSize = false,
+                Dock = DockStyle.Top,
+                Height = 34,
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
             dgvProducts = new DataGridView
             {
-                Location = new Point(14, 42),
-                Size = new Size(432, 420),
+                Dock = DockStyle.Fill,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 ReadOnly = true,
@@ -257,6 +264,9 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 BorderStyle = BorderStyle.FixedSingle,
                 RowHeadersVisible = false
             };
+            dgvProducts.CellClick += (s, e) => LoadSelectedProductIntoEditor();
+            dgvProducts.DoubleClick += (s, e) => LoadSelectedProductIntoEditor();
+            dgvProducts.SelectionChanged += DgvProducts_SelectionChanged;
 
             dgvProducts.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -292,8 +302,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             });
             UiGridHelper.ApplyResponsiveStyle(dgvProducts);
 
-            card.Controls.Add(lbl);
             card.Controls.Add(dgvProducts);
+            card.Controls.Add(lbl);
             pnlLeft.Controls.Add(card);
         }
 
@@ -306,19 +316,27 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Padding = new Padding(14)
             };
 
+            var titlePanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 34,
+                BackColor = Color.White
+            };
+
             var lbl = new Label
             {
                 Text = "Chi tiết phiếu nhập",
                 Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(22, 32, 72),
-                AutoSize = true,
-                Location = new Point(14, 12)
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft
             };
+            titlePanel.Controls.Add(lbl);
 
             dgvStockInDetails = new DataGridView
             {
-                Location = new Point(14, 42),
-                Size = new Size(470, 420),
+                Dock = DockStyle.Fill,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
                 ReadOnly = true,
@@ -329,7 +347,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 BorderStyle = BorderStyle.FixedSingle,
                 RowHeadersVisible = false
             };
-            dgvStockInDetails.DoubleClick += DgvStockInDetails_DoubleClick;
+            dgvStockInDetails.CellClick += (s, e) => LoadSelectedStockInLineIntoEditor();
+            dgvStockInDetails.DoubleClick += (s, e) => LoadSelectedStockInLineIntoEditor();
 
             dgvStockInDetails.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -390,9 +409,124 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             });
             UiGridHelper.ApplyResponsiveStyle(dgvStockInDetails);
 
-            card.Controls.Add(lbl);
             card.Controls.Add(dgvStockInDetails);
+            card.Controls.Add(titlePanel);
             pnlRight.Controls.Add(card);
+        }
+
+        private void BuildLineEditorPanel()
+        {
+            pnlLineEditor = new Panel
+            {
+                Dock = DockStyle.None,
+                Height = 72,
+                BackColor = Color.FromArgb(250, 251, 253),
+                Padding = new Padding(12)
+            };
+
+            lblSelectedProduct = new Label
+            {
+                Text = "Chưa chọn sản phẩm",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(22, 32, 72),
+                AutoSize = false,
+                Location = new Point(12, 8),
+                Size = new Size(420, 24)
+            };
+
+            lblQuantity = new Label
+            {
+                Text = "Số lượng",
+                AutoSize = true,
+                Location = new Point(12, 42)
+            };
+
+            nudQuantity = new NumericUpDown
+            {
+                Location = new Point(78, 38),
+                Size = new Size(82, 27),
+                Minimum = 1,
+                Maximum = 1000000,
+                Value = 1,
+                ThousandsSeparator = true
+            };
+
+            lblPrice = new Label
+            {
+                Text = "Giá nhập",
+                AutoSize = true,
+                Location = new Point(174, 42)
+            };
+
+            nudPrice = new NumericUpDown
+            {
+                Location = new Point(236, 38),
+                Size = new Size(122, 27),
+                Minimum = 0,
+                Maximum = 1000000000,
+                Increment = 1000,
+                DecimalPlaces = 0,
+                ThousandsSeparator = true
+            };
+
+            chkUseExpiry = new CheckBox
+            {
+                Text = "Có HSD",
+                AutoSize = true,
+                Location = new Point(372, 41)
+            };
+            chkUseExpiry.CheckedChanged += (s, e) =>
+            {
+                dtpExpiry.Enabled = chkUseExpiry.Checked;
+            };
+
+            dtpExpiry = new DateTimePicker
+            {
+                Format = DateTimePickerFormat.Custom,
+                CustomFormat = "dd/MM/yyyy",
+                Location = new Point(445, 38),
+                Size = new Size(112, 27),
+                MinDate = DateTime.Today,
+                Enabled = false
+            };
+
+            btnAddItem = MakeEditorButton("Thêm dòng", Color.FromArgb(90, 110, 200), Color.White);
+            btnAddItem.Click += BtnAddItem_Click;
+
+            btnUpdateItem = MakeEditorButton("Cập nhật", Color.FromArgb(22, 32, 72), Color.White);
+            btnUpdateItem.Click += BtnUpdateItem_Click;
+
+            btnDeleteItem = MakeEditorButton("Xóa dòng", Color.FromArgb(220, 80, 80), Color.White);
+            btnDeleteItem.Click += BtnDeleteItem_Click;
+
+            btnClearItem = MakeEditorButton("Làm mới", Color.FromArgb(230, 233, 240), Color.Black);
+            btnClearItem.Click += (s, e) => ClearLineEditor();
+
+            pnlLineEditor.Controls.Add(lblSelectedProduct);
+            pnlLineEditor.Controls.Add(lblQuantity);
+            pnlLineEditor.Controls.Add(nudQuantity);
+            pnlLineEditor.Controls.Add(lblPrice);
+            pnlLineEditor.Controls.Add(nudPrice);
+            pnlLineEditor.Controls.Add(chkUseExpiry);
+            pnlLineEditor.Controls.Add(dtpExpiry);
+            pnlLineEditor.Controls.Add(btnAddItem);
+            pnlLineEditor.Controls.Add(btnUpdateItem);
+            pnlLineEditor.Controls.Add(btnDeleteItem);
+            pnlLineEditor.Controls.Add(btnClearItem);
+        }
+
+        private Button MakeEditorButton(string text, Color backColor, Color foreColor)
+        {
+            Button button = new Button
+            {
+                Text = text,
+                Size = new Size(94, 32),
+                BackColor = backColor,
+                ForeColor = foreColor,
+                FlatStyle = FlatStyle.Flat
+            };
+            button.FlatAppearance.BorderSize = 0;
+            return button;
         }
 
         private void BuildFooter()
@@ -497,6 +631,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 x.SoLuongTon,
                 x.GiaNhap
             }).ToList();
+            ClearGridSelection(dgvProducts);
         }
 
         private void RefreshStockInDetailsView()
@@ -521,9 +656,21 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             dgvStockInDetails.DataSource = null;
             dgvStockInDetails.DataSource = viewData;
+            ClearGridSelection(dgvStockInDetails);
 
             decimal tongTien = _stockInItems.Sum(x => x.ThanhTien);
             lblTongPhieuValue.Text = tongTien.ToString("N0") + " đ";
+            btnSave.Enabled = _stockInItems.Count > 0;
+        }
+
+        private void DgvProducts_SelectionChanged(object sender, EventArgs e)
+        {
+            if (_suppressProductSelectionChanged || !dgvProducts.ContainsFocus)
+            {
+                return;
+            }
+
+            LoadSelectedProductIntoEditor();
         }
 
         private void SearchProducts()
@@ -542,6 +689,23 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 .ToList();
 
             BindProductsGrid(filtered);
+
+            ProductDTO exactBarcode = filtered.FirstOrDefault(x =>
+                !string.IsNullOrWhiteSpace(x.MaVach) &&
+                string.Equals(x.MaVach.Trim(), keyword, StringComparison.OrdinalIgnoreCase));
+
+            if (exactBarcode != null)
+            {
+                SelectProductRow(exactBarcode.MaSP);
+                SetSelectedProductInEditor(exactBarcode, true);
+                return;
+            }
+
+            if (filtered.Count == 1)
+            {
+                SelectProductRow(filtered[0].MaSP);
+                SetSelectedProductInEditor(filtered[0], true);
+            }
         }
 
         public void ApplyGlobalSearch(string keyword)
@@ -576,13 +740,17 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void BtnAddItem_Click(object sender, EventArgs e)
         {
-            ProductDTO product = GetSelectedProductFromGrid();
-            if (product == null)
-            {
-                return;
-            }
+            AddLineFromEditor();
+        }
 
-            AddProductToStockIn(product);
+        private void BtnUpdateItem_Click(object sender, EventArgs e)
+        {
+            UpdateLineFromEditor();
+        }
+
+        private void BtnDeleteItem_Click(object sender, EventArgs e)
+        {
+            DeleteSelectedStockInLine();
         }
 
         private void BtnCameraScan_Click(object sender, EventArgs e)
@@ -645,40 +813,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void DgvStockInDetails_DoubleClick(object sender, EventArgs e)
         {
-            if (dgvStockInDetails.CurrentRow == null)
-            {
-                return;
-            }
-
-            object cellValue = dgvStockInDetails.CurrentRow.Cells["LineId"].Value;
-            if (cellValue == null)
-            {
-                return;
-            }
-
-            Guid lineId;
-            if (!Guid.TryParse(cellValue.ToString(), out lineId))
-            {
-                return;
-            }
-
-            StockInDetailDTO item = _stockInItems.FirstOrDefault(x => x.LineId == lineId);
-            if (item == null)
-            {
-                return;
-            }
-
-            DialogResult result = MessageBox.Show(
-                "Xóa sản phẩm này khỏi phiếu nhập?",
-                "Xác nhận",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                _stockInItems.Remove(item);
-                RefreshStockInDetailsView();
-            }
+            LoadSelectedStockInLineIntoEditor();
         }
 
         private void BtnSave_Click(object sender, EventArgs e)
@@ -722,36 +857,49 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 _stockInItems.Clear();
                 txtGhiChu.Clear();
                 RefreshStockInDetailsView();
+                ClearLineEditor();
                 LoadProducts();
             }
         }
 
-        private ProductDTO GetSelectedProductFromGrid()
+        private ProductDTO GetSelectedProductFromGrid(bool showMessage = true)
         {
             if (dgvProducts.CurrentRow == null)
             {
-                MessageBox.Show("Vui lòng chọn sản phẩm để thêm.", "Thông báo");
+                if (showMessage)
+                {
+                    MessageBox.Show("Vui lòng chọn sản phẩm để thêm.", "Thông báo");
+                }
                 return null;
             }
 
             object cellValue = dgvProducts.CurrentRow.Cells["MaSP"].Value;
             if (cellValue == null)
             {
-                MessageBox.Show("Không xác định được sản phẩm.", "Thông báo");
+                if (showMessage)
+                {
+                    MessageBox.Show("Không xác định được sản phẩm.", "Thông báo");
+                }
                 return null;
             }
 
             int maSP;
             if (!int.TryParse(cellValue.ToString(), out maSP))
             {
-                MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
+                if (showMessage)
+                {
+                    MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
+                }
                 return null;
             }
 
             ProductDTO product = _productService.GetById(maSP);
             if (product == null)
             {
-                MessageBox.Show("Không tìm thấy sản phẩm.", "Thông báo");
+                if (showMessage)
+                {
+                    MessageBox.Show("Không tìm thấy sản phẩm.", "Thông báo");
+                }
                 return null;
             }
 
@@ -826,29 +974,39 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void SelectProductRow(int maSP)
         {
-            foreach (DataGridViewRow row in dgvProducts.Rows)
+            bool suppressPrevious = _suppressProductSelectionChanged;
+            _suppressProductSelectionChanged = true;
+
+            try
             {
-                object cellValue = row.Cells["MaSP"].Value;
-                if (cellValue == null)
+                foreach (DataGridViewRow row in dgvProducts.Rows)
                 {
-                    continue;
-                }
+                    object cellValue = row.Cells["MaSP"].Value;
+                    if (cellValue == null)
+                    {
+                        continue;
+                    }
 
-                int currentMaSP;
-                if (!int.TryParse(cellValue.ToString(), out currentMaSP))
-                {
-                    continue;
-                }
+                    int currentMaSP;
+                    if (!int.TryParse(cellValue.ToString(), out currentMaSP))
+                    {
+                        continue;
+                    }
 
-                if (currentMaSP != maSP)
-                {
-                    continue;
-                }
+                    if (currentMaSP != maSP)
+                    {
+                        continue;
+                    }
 
-                row.Selected = true;
-                dgvProducts.CurrentCell = row.Cells["TenSP"];
-                dgvProducts.FirstDisplayedScrollingRowIndex = row.Index;
-                break;
+                    row.Selected = true;
+                    dgvProducts.CurrentCell = row.Cells["TenSP"];
+                    dgvProducts.FirstDisplayedScrollingRowIndex = row.Index;
+                    break;
+                }
+            }
+            finally
+            {
+                _suppressProductSelectionChanged = suppressPrevious;
             }
         }
 
@@ -859,131 +1017,471 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 return;
             }
 
-            string soLuongText = Prompt.ShowDialog("Nhập số lượng:", "Thêm vào phiếu nhập", "1");
-            if (string.IsNullOrWhiteSpace(soLuongText))
+            SetSelectedProductInEditor(product, true);
+            nudQuantity.Focus();
+        }
+
+        private void LoadSelectedProductIntoEditor()
+        {
+            ProductDTO product = GetSelectedProductFromGrid(false);
+            if (product == null)
             {
                 return;
             }
 
-            int soLuong;
-            if (!int.TryParse(soLuongText.Trim(), out soLuong) || soLuong <= 0)
-            {
-                MessageBox.Show("Số lượng không hợp lệ.", "Thông báo");
-                return;
-            }
+            SetSelectedProductInEditor(product, true);
+        }
 
-            string giaNhapText = Prompt.ShowDialog("Nhập giá nhập:", "Thêm vào phiếu nhập", product.GiaNhap.ToString("0.##"));
-            if (string.IsNullOrWhiteSpace(giaNhapText))
+        private void SetSelectedProductInEditor(ProductDTO product, bool resetValues)
+        {
+            if (product == null)
             {
                 return;
             }
 
-            decimal giaNhap;
-            if (!decimal.TryParse(giaNhapText.Trim(), out giaNhap) || giaNhap < 0)
+            _selectedProductId = product.MaSP;
+            lblSelectedProduct.Text = product.MaSP + " - " + product.TenSP + "  |  Tồn hiện tại: " + product.SoLuongTon;
+
+            if (resetValues)
             {
-                MessageBox.Show("Giá nhập không hợp lệ.", "Thông báo");
-                return;
+                _editingLineId = null;
+                SetNumericValue(nudQuantity, 1);
+                SetNumericValue(nudPrice, product.GiaNhap);
+
+                DateTime suggestedExpiry = product.HanSuDung.HasValue && product.HanSuDung.Value.Date >= DateTime.Today
+                    ? product.HanSuDung.Value.Date
+                    : DateTime.Today;
+
+                dtpExpiry.Value = suggestedExpiry;
+                chkUseExpiry.Checked = product.HanSuDung.HasValue && product.HanSuDung.Value.Date >= DateTime.Today;
+                dtpExpiry.Enabled = chkUseExpiry.Checked;
             }
 
-            string hanSuDungText = Prompt.ShowDialog(
-                "Nhập hạn sử dụng (dd/MM/yyyy, bỏ trống nếu không có):",
-                "Thêm vào phiếu nhập",
-                product.HanSuDung.HasValue ? product.HanSuDung.Value.ToString("dd/MM/yyyy") : string.Empty);
+            UpdateLineEditorButtons();
+        }
 
-            DateTime? hanSuDung = null;
-            if (!string.IsNullOrWhiteSpace(hanSuDungText))
+        private void ClearLineEditor()
+        {
+            _selectedProductId = null;
+            _editingLineId = null;
+            lblSelectedProduct.Text = "Chưa chọn sản phẩm";
+            SetNumericValue(nudQuantity, 1);
+            SetNumericValue(nudPrice, 0);
+            dtpExpiry.Value = DateTime.Today;
+            chkUseExpiry.Checked = false;
+            dtpExpiry.Enabled = false;
+            ClearGridSelection(dgvProducts);
+            ClearGridSelection(dgvStockInDetails);
+            UpdateLineEditorButtons();
+        }
+
+        private void AddLineFromEditor()
+        {
+            StockInDetailDTO draft;
+            if (!TryBuildLineFromEditor(out draft))
             {
-                DateTime parsedDate;
-                string[] supportedFormats = { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd" };
-
-                if (!DateTime.TryParseExact(
-                    hanSuDungText.Trim(),
-                    supportedFormats,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.None,
-                    out parsedDate))
-                {
-                    MessageBox.Show("Hạn sử dụng không hợp lệ.", "Thông báo");
-                    return;
-                }
-
-                hanSuDung = parsedDate.Date;
+                return;
             }
 
             StockInDetailDTO existing = _stockInItems.FirstOrDefault(x =>
-                x.MaSP == product.MaSP &&
-                x.GiaNhapLucNhap == giaNhap &&
-                x.HanSuDung == hanSuDung);
+                IsSameLot(x, draft.MaSP, draft.GiaNhapLucNhap, draft.HanSuDung));
+
             if (existing == null)
             {
-                _stockInItems.Add(new StockInDetailDTO
-                {
-                    LineId = Guid.NewGuid(),
-                    MaSP = product.MaSP,
-                    SoLuong = soLuong,
-                    GiaNhapLucNhap = giaNhap,
-                    ThanhTien = soLuong * giaNhap,
-                    HanSuDung = hanSuDung
-                });
+                draft.LineId = Guid.NewGuid();
+                draft.ThanhTien = draft.SoLuong * draft.GiaNhapLucNhap;
+                _stockInItems.Add(draft);
+                RefreshStockInDetailsView();
+                SelectStockInLine(draft.LineId);
+                LoadLineIntoEditor(draft);
+                return;
             }
-            else
+
+            existing.SoLuong += draft.SoLuong;
+            existing.ThanhTien = existing.SoLuong * existing.GiaNhapLucNhap;
+            RefreshStockInDetailsView();
+            SelectStockInLine(existing.LineId);
+            LoadLineIntoEditor(existing);
+        }
+
+        private void UpdateLineFromEditor()
+        {
+            if (!_editingLineId.HasValue)
             {
-                existing.SoLuong += soLuong;
-                existing.GiaNhapLucNhap = giaNhap;
-                existing.ThanhTien = existing.SoLuong * existing.GiaNhapLucNhap;
-                if (hanSuDung.HasValue)
+                MessageBox.Show("Vui lòng chọn dòng trong phiếu nhập để cập nhật.", "Thông báo");
+                return;
+            }
+
+            StockInDetailDTO current = _stockInItems.FirstOrDefault(x => x.LineId == _editingLineId.Value);
+            if (current == null)
+            {
+                MessageBox.Show("Không tìm thấy dòng phiếu nhập cần cập nhật.", "Thông báo");
+                ClearLineEditor();
+                return;
+            }
+
+            StockInDetailDTO draft;
+            if (!TryBuildLineFromEditor(out draft))
+            {
+                return;
+            }
+
+            StockInDetailDTO duplicate = _stockInItems.FirstOrDefault(x =>
+                x.LineId != current.LineId &&
+                IsSameLot(x, draft.MaSP, draft.GiaNhapLucNhap, draft.HanSuDung));
+
+            if (duplicate != null)
+            {
+                duplicate.SoLuong += draft.SoLuong;
+                duplicate.ThanhTien = duplicate.SoLuong * duplicate.GiaNhapLucNhap;
+                _stockInItems.Remove(current);
+                RefreshStockInDetailsView();
+                SelectStockInLine(duplicate.LineId);
+                LoadLineIntoEditor(duplicate);
+                return;
+            }
+
+            current.MaSP = draft.MaSP;
+            current.SoLuong = draft.SoLuong;
+            current.GiaNhapLucNhap = draft.GiaNhapLucNhap;
+            current.HanSuDung = draft.HanSuDung;
+            current.ThanhTien = draft.SoLuong * draft.GiaNhapLucNhap;
+
+            RefreshStockInDetailsView();
+            SelectStockInLine(current.LineId);
+            LoadLineIntoEditor(current);
+        }
+
+        private void DeleteSelectedStockInLine()
+        {
+            StockInDetailDTO item = GetSelectedStockInLine();
+            if (item == null)
+            {
+                MessageBox.Show("Vui lòng chọn dòng cần xóa trong phiếu nhập.", "Thông báo");
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                "Xóa sản phẩm này khỏi phiếu nhập?",
+                "Xác nhận",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _stockInItems.Remove(item);
+            RefreshStockInDetailsView();
+            ClearLineEditor();
+        }
+
+        private bool TryBuildLineFromEditor(out StockInDetailDTO line)
+        {
+            line = null;
+            ProductDTO product = GetSelectedProductFromEditor();
+            if (product == null)
+            {
+                MessageBox.Show("Vui lòng chọn sản phẩm ở danh sách bên trái.", "Thông báo");
+                return false;
+            }
+
+            DateTime? expiry = null;
+            if (chkUseExpiry.Checked)
+            {
+                DateTime selectedDate = dtpExpiry.Value.Date;
+                if (selectedDate < DateTime.Today)
                 {
-                    existing.HanSuDung = hanSuDung;
+                    MessageBox.Show("Hạn sử dụng của lô nhập phải từ hôm nay trở đi.", "Thông báo");
+                    dtpExpiry.Focus();
+                    return false;
+                }
+
+                expiry = selectedDate;
+            }
+
+            line = new StockInDetailDTO
+            {
+                MaSP = product.MaSP,
+                SoLuong = Convert.ToInt32(nudQuantity.Value),
+                GiaNhapLucNhap = nudPrice.Value,
+                HanSuDung = expiry,
+                ThanhTien = Convert.ToInt32(nudQuantity.Value) * nudPrice.Value
+            };
+
+            return true;
+        }
+
+        private ProductDTO GetSelectedProductFromEditor()
+        {
+            if (!_selectedProductId.HasValue)
+            {
+                ProductDTO productFromGrid = GetSelectedProductFromGrid(false);
+                if (productFromGrid != null)
+                {
+                    SetSelectedProductInEditor(productFromGrid, true);
                 }
             }
 
-            RefreshStockInDetailsView();
+            if (!_selectedProductId.HasValue)
+            {
+                return null;
+            }
+
+            ProductDTO product = _products != null
+                ? _products.FirstOrDefault(x => x.MaSP == _selectedProductId.Value)
+                : null;
+
+            return product ?? _productService.GetById(_selectedProductId.Value);
         }
 
-        private static class Prompt
+        private void LoadSelectedStockInLineIntoEditor()
         {
-            public static string ShowDialog(string text, string caption, string defaultValue)
+            StockInDetailDTO item = GetSelectedStockInLine();
+            if (item == null)
             {
-                Form prompt = new Form()
-                {
-                    Width = 360,
-                    Height = 180,
-                    FormBorderStyle = FormBorderStyle.FixedDialog,
-                    Text = caption,
-                    StartPosition = FormStartPosition.CenterParent,
-                    MinimizeBox = false,
-                    MaximizeBox = false,
-                    BackColor = Color.White
-                };
-
-                Label textLabel = new Label() { Left = 20, Top = 20, Text = text, AutoSize = true };
-                TextBox textBox = new TextBox() { Left = 20, Top = 50, Width = 300, Text = defaultValue ?? string.Empty };
-                Button confirmation = new Button()
-                {
-                    Text = "OK",
-                    Left = 160,
-                    Width = 75,
-                    Top = 90,
-                    DialogResult = DialogResult.OK
-                };
-                Button cancel = new Button()
-                {
-                    Text = "Hủy",
-                    Left = 245,
-                    Width = 75,
-                    Top = 90,
-                    DialogResult = DialogResult.Cancel
-                };
-
-                prompt.Controls.Add(textLabel);
-                prompt.Controls.Add(textBox);
-                prompt.Controls.Add(confirmation);
-                prompt.Controls.Add(cancel);
-                prompt.AcceptButton = confirmation;
-                prompt.CancelButton = cancel;
-
-                return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : null;
+                return;
             }
+
+            LoadLineIntoEditor(item);
+        }
+
+        private StockInDetailDTO GetSelectedStockInLine()
+        {
+            if (_editingLineId.HasValue)
+            {
+                StockInDetailDTO editing = _stockInItems.FirstOrDefault(x => x.LineId == _editingLineId.Value);
+                if (editing != null)
+                {
+                    return editing;
+                }
+            }
+
+            if (dgvStockInDetails.CurrentRow == null)
+            {
+                return null;
+            }
+
+            object cellValue = dgvStockInDetails.CurrentRow.Cells["LineId"].Value;
+            if (cellValue == null)
+            {
+                return null;
+            }
+
+            Guid lineId;
+            if (!Guid.TryParse(cellValue.ToString(), out lineId))
+            {
+                return null;
+            }
+
+            return _stockInItems.FirstOrDefault(x => x.LineId == lineId);
+        }
+
+        private void LoadLineIntoEditor(StockInDetailDTO item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            ProductDTO product = _products != null
+                ? _products.FirstOrDefault(x => x.MaSP == item.MaSP)
+                : null;
+            product = product ?? _productService.GetById(item.MaSP);
+
+            if (product == null)
+            {
+                return;
+            }
+
+            _selectedProductId = item.MaSP;
+            _editingLineId = item.LineId;
+            lblSelectedProduct.Text = product.MaSP + " - " + product.TenSP + "  |  Đang sửa dòng phiếu";
+            SetNumericValue(nudQuantity, item.SoLuong);
+            SetNumericValue(nudPrice, item.GiaNhapLucNhap);
+
+            if (item.HanSuDung.HasValue)
+            {
+                dtpExpiry.Value = item.HanSuDung.Value.Date < DateTime.Today
+                    ? DateTime.Today
+                    : item.HanSuDung.Value.Date;
+                chkUseExpiry.Checked = true;
+            }
+            else
+            {
+                dtpExpiry.Value = DateTime.Today;
+                chkUseExpiry.Checked = false;
+            }
+
+            dtpExpiry.Enabled = chkUseExpiry.Checked;
+            SelectProductRow(item.MaSP);
+            UpdateLineEditorButtons();
+        }
+
+        private bool IsSameLot(StockInDetailDTO item, int maSP, decimal giaNhap, DateTime? hanSuDung)
+        {
+            return item != null &&
+                item.MaSP == maSP &&
+                item.GiaNhapLucNhap == giaNhap &&
+                NullableDateEquals(item.HanSuDung, hanSuDung);
+        }
+
+        private bool NullableDateEquals(DateTime? left, DateTime? right)
+        {
+            if (!left.HasValue && !right.HasValue)
+            {
+                return true;
+            }
+
+            return left.HasValue &&
+                right.HasValue &&
+                left.Value.Date == right.Value.Date;
+        }
+
+        private void SelectStockInLine(Guid lineId)
+        {
+            foreach (DataGridViewRow row in dgvStockInDetails.Rows)
+            {
+                object cellValue = row.Cells["LineId"].Value;
+                if (cellValue == null)
+                {
+                    continue;
+                }
+
+                Guid currentLineId;
+                if (!Guid.TryParse(cellValue.ToString(), out currentLineId) || currentLineId != lineId)
+                {
+                    continue;
+                }
+
+                row.Selected = true;
+                dgvStockInDetails.CurrentCell = row.Cells["TenSP"];
+                break;
+            }
+        }
+
+        private void SetNumericValue(NumericUpDown control, decimal value)
+        {
+            if (control == null)
+            {
+                return;
+            }
+
+            decimal safeValue = Math.Max(control.Minimum, Math.Min(control.Maximum, value));
+            control.Value = safeValue;
+        }
+
+        private void UpdateLineEditorButtons()
+        {
+            bool hasProduct = _selectedProductId.HasValue;
+            bool isEditing = _editingLineId.HasValue;
+
+            if (btnAddItem != null)
+            {
+                btnAddItem.Enabled = hasProduct;
+            }
+
+            if (btnUpdateItem != null)
+            {
+                btnUpdateItem.Enabled = hasProduct && isEditing;
+            }
+
+            if (btnDeleteItem != null)
+            {
+                btnDeleteItem.Enabled = isEditing;
+            }
+        }
+
+        private void ClearGridSelection(DataGridView grid)
+        {
+            if (grid == null)
+            {
+                return;
+            }
+
+            bool suppressPrevious = _suppressProductSelectionChanged;
+            _suppressProductSelectionChanged = true;
+
+            try
+            {
+                grid.ClearSelection();
+                if (grid.RowCount > 0)
+                {
+                    grid.CurrentCell = null;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                grid.ClearSelection();
+            }
+            finally
+            {
+                _suppressProductSelectionChanged = suppressPrevious;
+            }
+        }
+
+        private void UpdateResponsiveLayout()
+        {
+            if (pnlLeft != null && ClientSize.Width > 0)
+            {
+                pnlLeft.Width = Math.Max(420, Math.Min(560, ClientSize.Width * 44 / 100));
+            }
+
+            if (pnlHeader != null)
+            {
+                int x = 110;
+                int y = 64;
+                int gap = 10;
+                int buttonsWidth = btnSearch.Width + btnCameraScan.Width + btnPhoneScan.Width + gap * 3;
+                int searchWidth = Math.Max(180, pnlHeader.ClientSize.Width - x - 20 - buttonsWidth);
+
+                txtSearch.SetBounds(x, y, searchWidth, txtSearch.Height);
+                btnSearch.Location = new Point(txtSearch.Right + gap, 62);
+                btnCameraScan.Location = new Point(btnSearch.Right + gap, 62);
+                btnPhoneScan.Location = new Point(btnCameraScan.Right + gap, 62);
+            }
+
+            if (pnlFooter != null && btnSave != null)
+            {
+                btnSave.Location = new Point(
+                    Math.Max(520, pnlFooter.ClientSize.Width - 18 - btnSave.Width),
+                    38);
+                txtGhiChu.Width = Math.Max(240, btnSave.Left - 20 - txtGhiChu.Left);
+            }
+
+            UpdateLineEditorLayout();
+        }
+
+        private void UpdateLineEditorLayout()
+        {
+            if (pnlLineEditor == null || lblSelectedProduct == null)
+            {
+                return;
+            }
+
+            int editorWidth = Math.Max(760, pnlHeader.ClientSize.Width - 40);
+            pnlLineEditor.SetBounds(20, 104, editorWidth, 66);
+
+            int width = pnlLineEditor.ClientSize.Width;
+            lblSelectedProduct.Width = Math.Max(280, width - 24);
+
+            int top = 34;
+            int gap = 10;
+            lblQuantity.Location = new Point(12, top + 4);
+            nudQuantity.Location = new Point(78, top);
+            lblPrice.Location = new Point(nudQuantity.Right + gap + 4, top + 4);
+            nudPrice.Location = new Point(lblPrice.Right + 8, top);
+            chkUseExpiry.Location = new Point(nudPrice.Right + gap + 4, top + 3);
+            dtpExpiry.Location = new Point(chkUseExpiry.Right + 8, top);
+            dtpExpiry.Width = 112;
+
+            int buttonTop = top - 2;
+            int firstButtonLeft = dtpExpiry.Right + 18;
+            btnAddItem.Location = new Point(firstButtonLeft, buttonTop);
+            btnUpdateItem.Location = new Point(btnAddItem.Right + gap, buttonTop);
+            btnDeleteItem.Location = new Point(btnUpdateItem.Right + gap, buttonTop);
+            btnClearItem.Location = new Point(btnDeleteItem.Right + gap, buttonTop);
         }
     }
 }

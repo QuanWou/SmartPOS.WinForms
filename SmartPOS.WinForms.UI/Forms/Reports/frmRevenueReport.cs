@@ -231,6 +231,26 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
 
             pnlSummary.SetBounds(20, 150, Math.Max(300, width - 40), 86);
             dgvRevenue.SetBounds(20, 250, Math.Max(300, width - 40), Math.Max(120, height - 270));
+            RecalcSummaryLayout();
+        }
+
+        private void RecalcSummaryLayout()
+        {
+            int count = pnlSummary.Controls.Count;
+            if (count == 0)
+            {
+                return;
+            }
+
+            int gap = 12;
+            int left = 20;
+            int available = Math.Max(180, pnlSummary.ClientSize.Width - left * 2 - gap * (count - 1));
+            int itemWidth = Math.Max(150, available / count);
+
+            for (int i = 0; i < count; i++)
+            {
+                pnlSummary.Controls[i].SetBounds(left + i * (itemWidth + gap), 16, itemWidth, 52);
+            }
         }
 
         private void BtnGenerate_Click(object sender, EventArgs e)
