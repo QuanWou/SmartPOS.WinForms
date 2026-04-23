@@ -896,6 +896,18 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
             }
             base.Dispose(disposing);
         }
+
+        private void InitializeComponent()
+        {
+            this.SuspendLayout();
+            // 
+            // frmDashboard
+            // 
+            this.ClientSize = new System.Drawing.Size(1010, 421);
+            this.Name = "frmDashboard";
+            this.ResumeLayout(false);
+
+        }
     }
 }
 

@@ -28,10 +28,16 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private static readonly Color TextSoft = Color.FromArgb(120, 132, 160);
         private static readonly Color CardTint = Color.FromArgb(249, 251, 255);
         private static readonly Color DangerColor = Color.FromArgb(227, 88, 88);
-
+        private static readonly Color SoftDanger = Color.FromArgb(245, 247, 252);
+        private static readonly Color SoftDangerText = Color.FromArgb(190, 96, 96);
         private readonly IProductService _productService;
         private readonly IInvoiceService _invoiceService;
-
+        private static readonly Color CartCardColor = Color.White;
+        private static readonly Color CartBorderSoft = Color.FromArgb(236, 239, 246);
+        private static readonly Color QtyBg = Color.FromArgb(245, 247, 252);
+        private static readonly Color QtyCenterBg = Color.White;
+        private static readonly Color DeleteBg = Color.FromArgb(252, 243, 243);
+        private static readonly Color DeleteText = Color.FromArgb(220, 98, 98);
         private Panel pnlLeft;
         private Panel pnlRight;
         private Panel pnlTop;
@@ -340,7 +346,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Dock = DockStyle.Fill,
                 BackColor = SurfaceColor,
-                Padding = new Padding(16, 10, 16, 10)
+                Padding = new Padding(16, 12, 16, 12)
             };
 
             flpCartItems = new FlowLayoutPanel
@@ -349,7 +355,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoScroll = true,
                 WrapContents = false,
                 FlowDirection = FlowDirection.TopDown,
-                BackColor = SurfaceColor
+                BackColor = SurfaceColor,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
             };
 
             pnlCartBody.Controls.Add(flpCartItems);
@@ -533,12 +541,12 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             Panel card = new Panel
             {
-                Size = new Size(280, 118),
+                Size = new Size(296, 116),
                 Margin = new Padding(0, 0, 0, 12),
-                BackColor = CardTint,
+                BackColor = CartCardColor,
                 BorderStyle = BorderStyle.None
             };
-            card.Paint += CartItemCard_Paint;
+            card.Paint += ModernCartItemCard_Paint;
 
             Label lblTen = new Label
             {
@@ -546,73 +554,170 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
                 ForeColor = TextMain,
                 AutoSize = false,
-                Size = new Size(208, 26),
-                Location = new Point(14, 12)
+                Size = new Size(190, 24),
+                Location = new Point(16, 14)
             };
 
-            Label lblCongThucGia = new Label
+            Button btnXoa = new Button
             {
-                Text = item.DonGia.ToString("N0") + " \u0111 x " + item.SoLuong + " = " + thanhTien.ToString("N0") + " \u0111",
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-                ForeColor = PrimaryMid,
-                AutoSize = true,
-                Location = new Point(14, 46)
+                Text = "×",
+                Size = new Size(30, 30),
+                Location = new Point(248, 10),
+                BackColor = DeleteBg,
+                ForeColor = DeleteText,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                TabStop = false
             };
-
-            Button btnXoa = CreateCircleButton(
-                "X",
-                DangerColor,
-                Color.White,
-                new Point(236, 12),
-                true);
+            btnXoa.FlatAppearance.BorderSize = 0;
+            btnXoa.FlatAppearance.MouseOverBackColor = DeleteBg;
+            btnXoa.FlatAppearance.MouseDownBackColor = DeleteBg;
             btnXoa.Click += (s, e) => RemoveCartItem(item.MaSP);
 
-            Button btnGiam = CreateCircleButton(
-                "-",
-                FieldColor,
-                TextMain,
-                new Point(14, 76),
-                true);
+            Label lblGia = new Label
+            {
+                Text = item.DonGia.ToString("N0") + " đ x " + item.SoLuong,
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(16, 44)
+            };
+
+            Panel qtyWrap = new Panel
+            {
+                Size = new Size(118, 34),
+                Location = new Point(16, 70),
+                BackColor = QtyBg,
+                BorderStyle = BorderStyle.None
+            };
+            qtyWrap.Paint += (s, e) =>
+            {
+                Control c = s as Control;
+                using (var pen = new Pen(CartBorderSoft))
+                {
+                    e.Graphics.DrawRectangle(pen, 0, 0, c.Width - 1, c.Height - 1);
+                }
+            };
+
+            Button btnGiam = new Button
+            {
+                Text = "−",
+                Size = new Size(34, 34),
+                Location = new Point(0, 0),
+                BackColor = QtyBg,
+                ForeColor = TextMain,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                TabStop = false
+            };
+            btnGiam.FlatAppearance.BorderSize = 0;
+            btnGiam.FlatAppearance.MouseOverBackColor = QtyBg;
+            btnGiam.FlatAppearance.MouseDownBackColor = QtyBg;
             btnGiam.Click += (s, e) => UpdateCartItemQuantity(item.MaSP, -1);
 
             Label lblSoLuong = new Label
             {
                 Text = item.SoLuong.ToString(),
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
                 ForeColor = PrimaryDark,
-                Size = new Size(32, 26),
+                BackColor = QtyCenterBg,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Location = new Point(48, 78)
+                Size = new Size(50, 30),
+                Location = new Point(34, 2)
+            };
+            lblSoLuong.Paint += (s, e) =>
+            {
+                Control c = s as Control;
+                using (var pen = new Pen(CartBorderSoft))
+                {
+                    e.Graphics.DrawRectangle(pen, 0, 0, c.Width - 1, c.Height - 1);
+                }
             };
 
-            Button btnTang = CreateCircleButton(
-                "+",
-                canIncrease ? PrimaryMid : FieldColor,
-                canIncrease ? Color.White : TextSoft,
-                new Point(82, 76),
-                canIncrease);
+            Button btnTang = new Button
+            {
+                Text = "+",
+                Size = new Size(34, 34),
+                Location = new Point(84, 0),
+                BackColor = QtyBg,
+                ForeColor = canIncrease ? TextMain : TextSoft,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
+                Cursor = canIncrease ? Cursors.Hand : Cursors.Default,
+                TabStop = false,
+                Enabled = canIncrease
+            };
+            btnTang.FlatAppearance.BorderSize = 0;
+            btnTang.FlatAppearance.MouseOverBackColor = QtyBg;
+            btnTang.FlatAppearance.MouseDownBackColor = QtyBg;
             btnTang.Click += (s, e) => UpdateCartItemQuantity(item.MaSP, 1);
 
-            Label lblTonKho = new Label
+            qtyWrap.Controls.Add(btnGiam);
+            qtyWrap.Controls.Add(lblSoLuong);
+            qtyWrap.Controls.Add(btnTang);
+
+            Label lblThanhTien = new Label
             {
-                Text = GetStockText(item),
-                Font = new Font("Segoe UI", 8.5F),
-                ForeColor = TextSoft,
-                AutoSize = true,
-                Location = new Point(126, 83)
+                Text = thanhTien.ToString("N0") + " đ",
+                Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
+                ForeColor = PrimaryDark,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleRight,
+                Size = new Size(112, 24),
+                Location = new Point(166, 75)
             };
 
             card.Controls.Add(lblTen);
-            card.Controls.Add(lblCongThucGia);
             card.Controls.Add(btnXoa);
-            card.Controls.Add(btnGiam);
-            card.Controls.Add(lblSoLuong);
-            card.Controls.Add(btnTang);
-            card.Controls.Add(lblTonKho);
+            card.Controls.Add(lblGia);
+            card.Controls.Add(qtyWrap);
+            card.Controls.Add(lblThanhTien);
 
             return card;
         }
+        private void ModernCartItemCard_Paint(object sender, PaintEventArgs e)
+        {
+            Panel card = sender as Panel;
+            if (card == null) return;
 
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Rectangle rect = new Rectangle(0, 0, card.Width - 1, card.Height - 1);
+            using (Pen pen = new Pen(CartBorderSoft))
+            {
+                e.Graphics.DrawRectangle(pen, rect);
+            }
+        }
+        private Button CreateSoftButton(
+    string text,
+    Size size,
+    Point location,
+    Color backColor,
+    Color foreColor,
+    bool enabled)
+        {
+            Button button = new Button
+            {
+                Text = text,
+                Size = size,
+                Location = location,
+                BackColor = backColor,
+                ForeColor = foreColor,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+                Enabled = enabled,
+                TabStop = false,
+                Cursor = enabled ? Cursors.Hand : Cursors.Default
+            };
+
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = backColor;
+            button.FlatAppearance.MouseDownBackColor = backColor;
+
+            return button;
+        }
         private Button CreateCircleButton(
             string text,
             Color backColor,
