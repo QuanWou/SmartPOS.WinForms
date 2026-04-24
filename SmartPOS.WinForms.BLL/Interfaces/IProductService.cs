@@ -19,6 +19,8 @@ namespace SmartPOS.WinForms.BLL.Interfaces
 
         OperationResult Update(ProductDTO product);
 
+        OperationResult Delete(int maSP);
+
         OperationResult UpdateStock(int maSP, int soLuongTonMoi);
     }
 }

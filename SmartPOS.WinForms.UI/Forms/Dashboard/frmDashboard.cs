@@ -46,23 +46,19 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         private Timer tmrExpiryAlertAlert;
         private bool _expiryAlertBlinkOn;
 
-        // ── Charts row (layout 3 cột như mẫu cũ) ─────────────────────────
-        // Cột trái  : UcCompaniesChart  → hiển thị "Công ty" / thay thế bằng chart tồn kho hoặc danh mục
-        // Cột giữa  : UcRevenueChart    → doanh thu (bar chart)
-        // Cột phải  : UcTopPlansChart   → thay thế bằng UcTopProductsChart (top sản phẩm)
+        // ── Charts row (layout 2 cột) ─────────────────────────
+        // Cột trái  : UcRevenueChart    → doanh thu (bar chart)
+        // Cột phải  : UcTopProductsChart → top sản phẩm
         private TableLayoutPanel tlpCharts;
-        private UcCompaniesChart chartCompanies;   // cột trái  – giữ nguyên tên lớp như mẫu cũ
-        private UcRevenueChart chartRevenue;        // cột giữa  – bar chart doanh thu
-        private UcTopProductsChart chartTopProducts; // cột phải  – top sản phẩm (từ dashboard mới)
+        private UcRevenueChart chartRevenue;        // cột trái  – bar chart doanh thu
+        private UcTopProductsChart chartTopProducts; // cột phải  – top sản phẩm
 
-        // ── Lists row (layout 3 cột như mẫu cũ) ──────────────────────────
-        // Cột trái  : UcRecentTransactions → giao dịch gần đây (hóa đơn paid)
-        // Cột giữa  : UcInsightListPanel   → sắp hết hàng
+        // ── Lists row (layout 2 cột) ──────────────────────────
+        // Cột trái  : UcInsightListPanel   → sắp hết hàng
         // Cột phải  : UcInsightListPanel   → sắp hết hạn
         private TableLayoutPanel tlpLists;
-        private UcRecentTransactions listTransactions;  // giữ nguyên lớp như mẫu cũ
-        private UcInsightListPanel listLowStock;         // từ dashboard mới
-        private UcInsightListPanel listExpiry;           // từ dashboard mới
+        private UcInsightListPanel listLowStock;         // cột trái
+        private UcInsightListPanel listExpiry;           // cột phải
 
         // ── Design tokens (giống hệt mẫu cũ) ────────────────────────────
         private static readonly Color BG            = Color.FromArgb(248, 249, 251);
@@ -220,12 +216,10 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 UpdateExpiryAlert(expiringSoonLots);
 
                 // ── Charts ───────────────────────────────────────────────
-                LoadCategoriesChartData(totalCategories, totalProducts);
                 LoadRevenueChartData(paidInvoices);          // bar chart
                 LoadTopProductsChartData(topProducts);
 
                 // ── Insight lists ────────────────────────────────────────
-                LoadRecentTransactions(paidInvoices);
                 UpdateInsightLists(lowStockProducts, expiringSoonLots);
             }
             catch
@@ -248,30 +242,8 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         // ─────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Cột trái – truyền dữ liệu danh mục / sản phẩm vào UcCompaniesChart.
-        /// UcCompaniesChart vốn dùng để hiển thị "công ty theo tháng" trong mẫu cũ;
-        /// ở đây ta truyền số danh mục và tổng sản phẩm để chart vẫn có dữ liệu thực.
-        /// Nếu UcCompaniesChart có SetData(int, int) hoặc tương tự, gọi ở đây.
-        /// Nếu không, method này sẽ không làm gì (chart giữ placeholder).
-        /// </summary>
-        private void LoadCategoriesChartData(int totalCategories, int totalProducts)
-        {
-            if (chartCompanies == null) return;
-
-            // Thử gọi SetData nếu UcCompaniesChart hỗ trợ
-            // Nếu interface khác, điều chỉnh tham số cho phù hợp
-            try
-            {
-                // Ví dụ: chartCompanies.SetData(totalCategories, totalProducts);
-                // Nếu UcCompaniesChart không có SetData, xóa dòng trên
-            }
-            catch { /* ignore nếu method không tồn tại */ }
-        }
-
-        /// <summary>
-        /// Cột giữa – doanh thu 7 ngày gần nhất dưới dạng BAR CHART.
+        /// Cột trái – doanh thu 7 ngày gần nhất dưới dạng BAR CHART.
         /// SetData truyền List<RevenueChartItemResponse> giống dashboard mới.
-        /// UcRevenueChart cần được sửa để vẽ cột thay vì đường (xem ghi chú bên dưới).
         /// </summary>
         private void LoadRevenueChartData(List<InvoiceDTO> paidInvoices)
         {
@@ -313,28 +285,6 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         {
             if (chartTopProducts == null) return;
             chartTopProducts.SetData(topProducts, "30 ngày gần nhất");
-        }
-
-        /// <summary>
-        /// List cột trái – hóa đơn gần đây (giống UcRecentTransactions mẫu cũ).
-        /// Dùng dữ liệu thực từ paidInvoices.
-        /// </summary>
-        private void LoadRecentTransactions(List<InvoiceDTO> paidInvoices)
-        {
-            if (listTransactions == null) return;
-
-            var recent = paidInvoices
-                .OrderByDescending(x => x.NgayLap)
-                .Take(5)
-                .ToList();
-
-            // Thử gọi SetData nếu UcRecentTransactions hỗ trợ
-            try
-            {
-                // Ví dụ: listTransactions.SetData(recent);
-                // Điều chỉnh tham số theo interface thực tế của UcRecentTransactions
-            }
-            catch { /* ignore */ }
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -557,30 +507,22 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
         }
 
         // ─────────────────────────────────────────────────────────────────
-        //  CHARTS ROW  – 3 cột như mẫu cũ, nhưng dùng chart mới ở cột phải
+        //  CHARTS ROW  – 2 cột: doanh thu và top sản phẩm
         // ─────────────────────────────────────────────────────────────────
         private void BuildChartsRow()
         {
             tlpCharts = new TableLayoutPanel
             {
-                ColumnCount = 3,
+                ColumnCount = 2,
                 RowCount    = 1,
                 BackColor   = Color.Transparent,
                 Height      = 300
             };
             tlpCharts.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28F));
-            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44F));
-            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28F));
+            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tlpCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
 
-            // Cột trái: danh mục / sản phẩm overview (giữ UcCompaniesChart như mẫu cũ)
-            chartCompanies = new UcCompaniesChart
-            {
-                Dock   = DockStyle.Fill,
-                Margin = new Padding(0, 0, 12, 0)
-            };
-
-            // Cột giữa: doanh thu – BAR CHART (UcRevenueChart, render mode = Bar)
+            // Cột trái: doanh thu – BAR CHART (UcRevenueChart, render mode = Bar)
             chartRevenue = new UcRevenueChart
             {
                 Dock      = DockStyle.Fill,
@@ -596,38 +538,29 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 Margin = new Padding(0)
             };
 
-            tlpCharts.Controls.Add(chartCompanies,   0, 0);
-            tlpCharts.Controls.Add(chartRevenue,     1, 0);
-            tlpCharts.Controls.Add(chartTopProducts, 2, 0);
+            tlpCharts.Controls.Add(chartRevenue,     0, 0);
+            tlpCharts.Controls.Add(chartTopProducts, 1, 0);
 
             pnlMainContent.Controls.Add(tlpCharts);
         }
 
         // ─────────────────────────────────────────────────────────────────
-        //  LISTS ROW  – 3 cột như mẫu cũ
-        //    Cột 1: Hóa đơn gần đây (UcRecentTransactions – giữ từ mẫu cũ)
-        //    Cột 2: Sắp hết hàng    (UcInsightListPanel   – từ dashboard mới)
-        //    Cột 3: Sắp hết hạn     (UcInsightListPanel   – từ dashboard mới)
+        //  LISTS ROW  – 2 cột
+        //    Cột 1: Sắp hết hàng    (UcInsightListPanel)
+        //    Cột 2: Sắp hết hạn     (UcInsightListPanel)
         // ─────────────────────────────────────────────────────────────────
         private void BuildListsRow()
         {
             tlpLists = new TableLayoutPanel
             {
-                ColumnCount = 3,
+                ColumnCount = 2,
                 RowCount    = 1,
                 BackColor   = Color.Transparent,
                 Height      = 260
             };
             tlpLists.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-
-            listTransactions = new UcRecentTransactions
-            {
-                Dock   = DockStyle.Fill,
-                Margin = new Padding(0, 0, 12, 0)
-            };
+            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tlpLists.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
 
             listLowStock = new UcInsightListPanel
             {
@@ -645,9 +578,8 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
             };
             listExpiry.Click += (s, e) => NavigateToExpiryProducts();
 
-            tlpLists.Controls.Add(listTransactions, 0, 0);
-            tlpLists.Controls.Add(listLowStock,     1, 0);
-            tlpLists.Controls.Add(listExpiry,       2, 0);
+            tlpLists.Controls.Add(listLowStock, 0, 0);
+            tlpLists.Controls.Add(listExpiry,   1, 0);
 
             pnlMainContent.Controls.Add(tlpLists);
         }
@@ -768,42 +700,38 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
                 y += flowH + GAP;
             }
 
-            // 5. Charts row (3 cột, responsive như mẫu cũ)
+            // 5. Charts row (2 cột, responsive)
             if (tlpCharts != null)
             {
                 if (narrow)
                 {
-                    tlpCharts.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpCharts.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpCharts.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 0F);
+                    tlpCharts.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 100F);
+                    tlpCharts.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, 0F);
                     if (chartTopProducts != null) chartTopProducts.Visible = false;
                 }
                 else
                 {
-                    tlpCharts.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 28F);
-                    tlpCharts.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 44F);
-                    tlpCharts.ColumnStyles[2] = new ColumnStyle(SizeType.Percent, 28F);
+                    tlpCharts.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 50F);
+                    tlpCharts.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 50F);
                     if (chartTopProducts != null) chartTopProducts.Visible = true;
                 }
                 tlpCharts.SetBounds(0, y, cw, 300);
                 y += 300 + GAP;
             }
 
-            // 6. Lists row (3 cột, responsive như mẫu cũ)
+            // 6. Lists row (2 cột, responsive)
             if (tlpLists != null)
             {
                 if (narrow)
                 {
-                    tlpLists.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpLists.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 50F);
-                    tlpLists.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 0F);
+                    tlpLists.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 100F);
+                    tlpLists.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, 0F);
                     if (listExpiry != null) listExpiry.Visible = false;
                 }
                 else
                 {
-                    tlpLists.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 33.33F);
-                    tlpLists.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 33.33F);
-                    tlpLists.ColumnStyles[2] = new ColumnStyle(SizeType.Percent, 33.33F);
+                    tlpLists.ColumnStyles[0] = new ColumnStyle(SizeType.Percent, 50F);
+                    tlpLists.ColumnStyles[1] = new ColumnStyle(SizeType.Percent, 50F);
                     if (listExpiry != null) listExpiry.Visible = true;
                 }
                 tlpLists.SetBounds(0, y, cw, 260);
