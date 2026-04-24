@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/Database/" />
+  <Folder Name="/Database/">
+    <File Path="SmartPOSWinForms.sql" />
+  </Folder>
   <Folder Name="/Database/Docs/" />
   <Folder Name="/Database/Scripts/">
     <File Path="01_CreateDatabase.sql" />

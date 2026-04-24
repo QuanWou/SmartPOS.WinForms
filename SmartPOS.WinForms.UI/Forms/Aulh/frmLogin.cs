@@ -359,10 +359,10 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
             {
                 SetLoadingState(false);
 
-                if (!this.Visible)
+                if (!this.IsDisposed && !this.Visible)
                 {
-                    this.Show();
-                }
+                    this.BeginInvoke(new Action(() => this.Show()));
+                } 
 
                 MessageBox.Show(
                     "Có lỗi xảy ra:\n" + ex.Message,
