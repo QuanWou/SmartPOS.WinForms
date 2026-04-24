@@ -18,6 +18,12 @@ namespace SmartPOS.WinForms.DAL.Interfaces
 
         int Update(ProductDTO product);
 
+        bool HasTransactionHistory(int maSP);
+
+        int Delete(int maSP);
+
+        int UpdateStatus(int maSP, bool trangThai);
+
         int UpdateStock(int maSP, int soLuongTonMoi);
     }
 }

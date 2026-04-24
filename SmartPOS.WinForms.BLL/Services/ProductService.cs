@@ -148,6 +148,58 @@ namespace SmartPOS.WinForms.BLL.Services
             }
         }
 
+        public OperationResult Delete(int maSP)
+        {
+            if (!ValidationHelper.IsPositiveInt(maSP))
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = MessageConstants.InvalidInput
+                };
+            }
+
+            try
+            {
+                ProductDTO product = _productRepository.GetById(maSP);
+                if (product == null)
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = MessageConstants.NoDataFound
+                    };
+                }
+
+                if (product.TrangThai)
+                {
+                    int inactiveRowsAffected = _productRepository.UpdateStatus(maSP, false);
+
+                    return new OperationResult
+                    {
+                        IsSuccess = inactiveRowsAffected > 0,
+                        Message = inactiveRowsAffected > 0 ? MessageConstants.UpdateSuccess : MessageConstants.UpdateFailed
+                    };
+                }
+
+                int rowsAffected = _productRepository.Delete(maSP);
+
+                return new OperationResult
+                {
+                    IsSuccess = rowsAffected > 0,
+                    Message = rowsAffected > 0 ? MessageConstants.DeleteSuccess : MessageConstants.DeleteFailed
+                };
+            }
+            catch (Exception ex)
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = MessageConstants.DeleteFailed + " " + ex.Message
+                };
+            }
+        }
+
         public OperationResult UpdateStock(int maSP, int soLuongTonMoi)
         {
             if (!ValidationHelper.IsPositiveInt(maSP))

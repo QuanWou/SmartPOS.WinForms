@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Text;
+using Dapper;
 using SmartPOS.WinForms.DAL.Data;
 using SmartPOS.WinForms.DAL.Interfaces;
 using SmartPOS.WinForms.DTO.Entities;
@@ -271,6 +272,96 @@ namespace SmartPOS.WinForms.DAL.Repositories
                 WHERE MaSP = @MaSP";
 
             return _dbHelper.Execute(sql, product);
+        }
+
+        public bool HasTransactionHistory(int maSP)
+        {
+            string sql = @"
+                SELECT CAST(
+                    CASE
+                        WHEN EXISTS (SELECT 1 FROM InvoiceDetails WHERE MaSP = @MaSP)
+                          OR EXISTS (SELECT 1 FROM StockInDetails WHERE MaSP = @MaSP)
+                          OR EXISTS (
+                                SELECT 1
+                                FROM ProductLots
+                                WHERE MaSP = @MaSP
+                                  AND (MaPN IS NOT NULL OR MaCTPN IS NOT NULL)
+                            )
+                          OR EXISTS (
+                                SELECT 1
+                                FROM InvoiceLotAllocations ila
+                                INNER JOIN ProductLots pl ON pl.MaLo = ila.MaLo
+                                WHERE pl.MaSP = @MaSP
+                            )
+                            THEN 1
+                        ELSE 0
+                    END AS BIT)";
+
+            return _dbHelper.QueryFirstOrDefault<bool>(sql, new { MaSP = maSP });
+        }
+
+        public int Delete(int maSP)
+        {
+            using (var scope = new DbTransactionScope())
+            {
+                try
+                {
+                    // Delete InvoiceLotAllocations that reference this product's lots
+                    scope.Connection.Execute(
+                        @"DELETE FROM InvoiceLotAllocations 
+                          WHERE MaLo IN (SELECT MaLo FROM ProductLots WHERE MaSP = @MaSP)",
+                        new { MaSP = maSP },
+                        scope.Transaction);
+
+                    // Delete InvoiceDetails that reference this product
+                    scope.Connection.Execute(
+                        "DELETE FROM InvoiceDetails WHERE MaSP = @MaSP",
+                        new { MaSP = maSP },
+                        scope.Transaction);
+
+                    // Delete ProductLots for this product (must be before StockInDetails)
+                    scope.Connection.Execute(
+                        "DELETE FROM ProductLots WHERE MaSP = @MaSP",
+                        new { MaSP = maSP },
+                        scope.Transaction);
+
+                    // Delete StockInDetails for this product
+                    scope.Connection.Execute(
+                        "DELETE FROM StockInDetails WHERE MaSP = @MaSP",
+                        new { MaSP = maSP },
+                        scope.Transaction);
+
+                    // Delete the product itself
+                    int rowsAffected = scope.Connection.Execute(
+                        "DELETE FROM Products WHERE MaSP = @MaSP",
+                        new { MaSP = maSP },
+                        scope.Transaction);
+
+                    scope.Commit();
+                    return rowsAffected;
+                }
+                catch
+                {
+                    scope.Rollback();
+                    throw;
+                }
+            }
+        }
+
+        public int UpdateStatus(int maSP, bool trangThai)
+        {
+            string sql = @"
+                UPDATE Products
+                SET
+                    TrangThai = @TrangThai,
+                    NgayCapNhat = GETDATE()
+                WHERE MaSP = @MaSP";
+
+            return _dbHelper.Execute(sql, new
+            {
+                MaSP = maSP,
+                TrangThai = trangThai
+            });
         }
 
         public int UpdateStock(int maSP, int soLuongTonMoi)

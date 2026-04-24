@@ -32,6 +32,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         private Button btnReload;
         private Button btnAdd;
         private Button btnEdit;
+        private Button btnDelete;
 
         private DataGridView dgvProducts;
 
@@ -151,6 +152,18 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             btnEdit.FlatAppearance.BorderSize = 0;
             btnEdit.Click += BtnEdit_Click;
 
+            btnDelete = new Button
+            {
+                Text = "Xóa",
+                Location = new Point(980, 90),
+                Size = new Size(75, 32),
+                BackColor = Color.FromArgb(220, 80, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnDelete.FlatAppearance.BorderSize = 0;
+            btnDelete.Click += BtnDelete_Click;
+
             dgvProducts = new DataGridView
             {
                 Location = new Point(20, 140),
@@ -180,6 +193,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             this.Controls.Add(btnReload);
             this.Controls.Add(btnAdd);
             this.Controls.Add(btnEdit);
+            this.Controls.Add(btnDelete);
             this.Controls.Add(dgvProducts);
 
             this.Load += FrmProducts_Load;
@@ -285,6 +299,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             bool canManageProducts = !SessionManager.IsStaff;
             btnAdd.Visible = canManageProducts;
             btnEdit.Visible = canManageProducts;
+            btnDelete.Visible = canManageProducts;
         }
 
         private void LoadCategoryFilter()
@@ -345,23 +360,9 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
         private void BtnEdit_Click(object sender, EventArgs e)
         {
-            if (dgvProducts.CurrentRow == null)
+            int maSP = GetSelectedProductId("sửa");
+            if (maSP <= 0)
             {
-                MessageBox.Show("Vui lòng chọn sản phẩm cần sửa.", "Thông báo");
-                return;
-            }
-
-            object cellValue = dgvProducts.CurrentRow.Cells["MaSP"].Value;
-            if (cellValue == null)
-            {
-                MessageBox.Show("Không xác định được sản phẩm cần sửa.", "Thông báo");
-                return;
-            }
-
-            int maSP;
-            if (!int.TryParse(cellValue.ToString(), out maSP))
-            {
-                MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
                 return;
             }
 
@@ -381,6 +382,77 @@ namespace SmartPOS.WinForms.UI.Forms.Products
                     LoadProducts();
                 }
             }
+        }
+
+        private void BtnDelete_Click(object sender, EventArgs e)
+        {
+            int maSP = GetSelectedProductId("xóa");
+            if (maSP <= 0)
+            {
+                return;
+            }
+
+            ProductDTO product = _productService.GetById(maSP);
+            if (product == null)
+            {
+                MessageBox.Show("Không tìm thấy sản phẩm.", "Thông báo");
+                return;
+            }
+
+            bool isActiveProduct = product.TrangThai;
+            string message = isActiveProduct
+                ? string.Format("Bạn có chắc muốn chuyển sản phẩm \"{0}\" sang Ngừng bán?", product.TenSP)
+                : string.Format("Bạn có chắc muốn xóa vĩnh viễn sản phẩm \"{0}\"?", product.TenSP);
+
+            DialogResult confirm = MessageBox.Show(
+                message,
+                isActiveProduct ? "Xác nhận ngừng bán" : "Xác nhận xóa",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+
+            OperationResult result = _productService.Delete(maSP);
+
+            if (result.IsSuccess)
+            {
+                SearchProducts();
+                return;
+            }
+
+            MessageBox.Show(
+                result.Message,
+                "Thông báo",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        private int GetSelectedProductId(string actionName)
+        {
+            if (dgvProducts.CurrentRow == null)
+            {
+                MessageBox.Show("Vui lòng chọn sản phẩm cần " + actionName + ".", "Thông báo");
+                return 0;
+            }
+
+            object cellValue = dgvProducts.CurrentRow.Cells["MaSP"].Value;
+            if (cellValue == null)
+            {
+                MessageBox.Show("Không xác định được sản phẩm cần " + actionName + ".", "Thông báo");
+                return 0;
+            }
+
+            int maSP;
+            if (!int.TryParse(cellValue.ToString(), out maSP))
+            {
+                MessageBox.Show("Dữ liệu sản phẩm không hợp lệ.", "Thông báo");
+                return 0;
+            }
+
+            return maSP;
         }
 
         private void SearchProducts()
@@ -460,7 +532,47 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             int right = 20;
             int buttonTop = 90;
             int gap = 10;
+            int filterGap = 15;
+            int preferredKeywordWidth = 220;
+            int preferredCategoryWidth = 180;
+            int preferredStatusWidth = 140;
+            int minKeywordWidth = 150;
+            int minCategoryWidth = 125;
+            int minStatusWidth = 100;
+            int preferredFilterWidth = preferredKeywordWidth + preferredCategoryWidth + preferredStatusWidth + (filterGap * 2);
+            int minFilterWidth = minKeywordWidth + minCategoryWidth + minStatusWidth + (filterGap * 2);
+            int buttonGroupWidth = btnSearch.Width + btnReload.Width + gap;
+
+            if (btnAdd.Visible)
+            {
+                buttonGroupWidth += btnAdd.Width + gap;
+            }
+
+            if (btnEdit.Visible)
+            {
+                buttonGroupWidth += btnEdit.Width + gap;
+            }
+
+            if (btnDelete.Visible)
+            {
+                buttonGroupWidth += btnDelete.Width + gap;
+            }
+
+            bool splitButtonRow = ClientSize.Width - left - right < minFilterWidth + filterGap + buttonGroupWidth;
+            int gridTop = splitButtonRow ? 180 : 140;
+
+            if (splitButtonRow)
+            {
+                buttonTop = 130;
+            }
+
             int x = ClientSize.Width - right;
+
+            if (btnDelete.Visible)
+            {
+                btnDelete.Location = new Point(x - btnDelete.Width, buttonTop);
+                x = btnDelete.Left - gap;
+            }
 
             if (btnEdit.Visible)
             {
@@ -479,11 +591,50 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
             btnSearch.Location = new Point(x - btnSearch.Width, buttonTop);
 
+            int filterRight = splitButtonRow
+                ? ClientSize.Width - right
+                : btnSearch.Left - filterGap;
+            int availableFilterWidth = Math.Max(260, filterRight - left);
+            int keywordWidth = preferredKeywordWidth;
+            int categoryWidth = preferredCategoryWidth;
+            int statusWidth = preferredStatusWidth;
+
+            if (availableFilterWidth < preferredFilterWidth)
+            {
+                if (availableFilterWidth >= minFilterWidth)
+                {
+                    int extraWidth = availableFilterWidth - minFilterWidth;
+                    keywordWidth = minKeywordWidth + (extraWidth / 2);
+                    categoryWidth = minCategoryWidth + (extraWidth / 3);
+                    statusWidth = availableFilterWidth - keywordWidth - categoryWidth - (filterGap * 2);
+                }
+                else
+                {
+                    int narrowGap = 8;
+                    int fieldWidth = Math.Max(70, (availableFilterWidth - (narrowGap * 2)) / 3);
+                    filterGap = narrowGap;
+                    keywordWidth = fieldWidth;
+                    categoryWidth = fieldWidth;
+                    statusWidth = Math.Max(70, availableFilterWidth - keywordWidth - categoryWidth - (filterGap * 2));
+                }
+            }
+
+            lblKeyword.Location = new Point(left, 70);
+            txtKeyword.SetBounds(left, 92, keywordWidth, txtKeyword.Height);
+
+            int categoryLeft = txtKeyword.Right + filterGap;
+            lblCategory.Location = new Point(categoryLeft, 70);
+            cboCategory.SetBounds(categoryLeft, 92, categoryWidth, cboCategory.Height);
+
+            int statusLeft = cboCategory.Right + filterGap;
+            lblStatus.Location = new Point(statusLeft, 70);
+            cboStatus.SetBounds(statusLeft, 92, statusWidth, cboStatus.Height);
+
             dgvProducts.SetBounds(
                 left,
-                140,
+                gridTop,
                 Math.Max(320, ClientSize.Width - left - right),
-                Math.Max(220, ClientSize.Height - 160));
+                Math.Max(220, ClientSize.Height - gridTop - 20));
         }
 
         private class ComboBoxItem
