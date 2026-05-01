@@ -43,6 +43,7 @@
   <ItemGroup>
     <Compile Include="Config\AppSettings.cs" />
     <Compile Include="Constants\AppConstants.cs" />
+    <Compile Include="Constants\LoyaltyConstants.cs" />
     <Compile Include="Constants\MessageConstants.cs" />
     <Compile Include="Constants\RoleConstants.cs" />
     <Compile Include="Enums\DeviceCommand.cs" />

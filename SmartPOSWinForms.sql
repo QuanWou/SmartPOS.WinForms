@@ -1,4 +1,4 @@
-﻿CREATE DATABASE [SmartPOSWinForms]
+﻿	CREATE DATABASE [SmartPOSWinForms]
 GO
 
 USE [SmartPOSWinForms]

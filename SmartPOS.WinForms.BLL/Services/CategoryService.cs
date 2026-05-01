@@ -23,7 +23,7 @@ namespace SmartPOS.WinForms.BLL.Services
         {
             return _categoryRepository.GetAll();
         }
-
+        
         public CategoryDTO GetById(int maLoai)
         {
             if (!ValidationHelper.IsPositiveInt(maLoai))

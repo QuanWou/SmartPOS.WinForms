@@ -43,6 +43,9 @@
   <ItemGroup>
     <Compile Include="Entities\CashDrawerLogDTO.cs" />
     <Compile Include="Entities\CategoryDTO.cs" />
+    <Compile Include="Entities\ChatSessionMessageDTO.cs" />
+    <Compile Include="Entities\CustomerDTO.cs" />
+    <Compile Include="Entities\CustomerPointTransactionDTO.cs" />
     <Compile Include="Entities\InvoiceDetailDTO.cs" />
     <Compile Include="Entities\InvoiceDTO.cs" />
     <Compile Include="Entities\ProductLotDTO.cs" />
@@ -52,10 +55,20 @@
     <Compile Include="Entities\UserDTO.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Requests\CheckoutRequest.cs" />
+    <Compile Include="Requests\CustomerSearchRequest.cs" />
     <Compile Include="Requests\LoginRequest.cs" />
     <Compile Include="Requests\ProductSearchRequest.cs" />
     <Compile Include="Requests\StockInRequest.cs" />
+    <Compile Include="Responses\ChatBotCategoryComparisonResponse.cs" />
+    <Compile Include="Responses\ChatBotInvoiceSummaryResponse.cs" />
+    <Compile Include="Responses\ChatBotMetricResponse.cs" />
+    <Compile Include="Responses\ChatBotProductInsightResponse.cs" />
+    <Compile Include="Responses\ChatBotResponse.cs" />
     <Compile Include="Responses\DashboardSummaryResponse.cs" />
+    <Compile Include="Responses\CustomerCategoryTrendResponse.cs" />
+    <Compile Include="Responses\CustomerPurchaseHistoryResponse.cs" />
+    <Compile Include="Responses\CustomerStatsResponse.cs" />
+    <Compile Include="Responses\CustomerTopProductResponse.cs" />
     <Compile Include="Responses\InvoicePrintItemDTO.cs" />
     <Compile Include="Responses\LoginResponse.cs" />
     <Compile Include="Responses\OperationResult.cs" />

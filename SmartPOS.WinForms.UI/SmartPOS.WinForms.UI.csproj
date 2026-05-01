@@ -88,6 +88,21 @@
     <Compile Include="Forms\Aulh\frmLogin.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\ChatBot\frmChatBot.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Customers\frmCustomerEdit.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Customers\frmCustomerHistory.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Customers\frmCustomerLookup.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\Customers\frmCustomers.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Helpers\UiGridHelper.cs" />
     <Compile Include="Forms\Dashboard\frmDashboard.cs">
       <SubType>Form</SubType>
@@ -163,6 +178,9 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SqlServerTypes\Loader.cs" />
+    <Compile Include="UserControls\ChatBot\UcAiChatPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="UserControls\Dashboard\ucListPanels.cs">
       <SubType>UserControl</SubType>
     </Compile>

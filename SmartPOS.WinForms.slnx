@@ -11,6 +11,7 @@
     <File Path="04_StoredProcedures.sql" />
     <File Path="05_Views.sql" />
     <File Path="06_TestData.sql" />
+    <File Path="08_AddCustomerManagement.sql" />
   </Folder>
   <Project Path="SmartPOS.WinForms.BLL/SmartPOS.WinForms.BLL.csproj" Id="226d319d-d853-483b-ba8e-ba32acbd49c6" />
   <Project Path="SmartPOS.WinForms.Common/SmartPOS.WinForms.Common.csproj" Id="5c8fd337-55e5-4179-adfc-8dbbf5092892" />

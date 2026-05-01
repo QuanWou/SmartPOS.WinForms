@@ -7,9 +7,12 @@ using SmartPOS.WinForms.UI.Forms.Reports;
 using SmartPOS.WinForms.UI.Forms.Stock;
 using SmartPOS.WinForms.UI.Forms.Users;
 using SmartPOS.WinForms.UI.Forms.Products;
+using SmartPOS.WinForms.UI.Forms.Customers;
+using SmartPOS.WinForms.UI.Forms.ChatBot;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.UI.Interfaces;
 using SmartPOS.WinForms.UI.UserControls;
+using SmartPOS.WinForms.UI.UserControls.ChatBot;
 using SmartPOS.WinForms.UI.UserControls.Navigation;
 using System;
 using System.Drawing;
@@ -33,12 +36,21 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         private UcSidebar sidebar;
         private UcTopBar topBar;
         private Panel pnlContent;     // holds the active page
+        private Panel pnlPageHost;    // active page area, next to AI chat
         private Panel pnlRight;       // topBar + pnlContent (right column)
+        private UcAiChatPanel aiChatPanel;
+        private Button btnAiFloat;
 
         // Track current page to avoid redundant reloads
         private Form _currentPage;
         private string _lastQuickSearchTerm;
         private ContextMenuStrip _activeTopBarMenu;
+        private bool _aiChatWide;
+        private bool _isAiFloatDragging;
+        private bool _aiFloatDragMoved;
+        private Point _aiFloatDragStartMouse;
+        private Point _aiFloatStartLocation;
+        private Point? _aiFloatCustomLocation;
         private readonly IInvoiceService _invoiceService;
         private readonly IProductService _productService;
         private readonly IProductLotService _productLotService;
@@ -179,6 +191,19 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                     return;
                 }
 
+                if (_currentPage is frmCustomers)
+                {
+                    using (var frm = new frmCustomerEdit())
+                    {
+                        frm.ShowDialog(this);
+                        if (frm.IsSavedSuccessfully)
+                        {
+                            LoadPage(new frmCustomers(), true);
+                        }
+                    }
+                    return;
+                }
+
                 MessageBox.Show("Chức năng thêm mới chưa được hỗ trợ ở màn hình này.", "Thông báo");
             };
 
@@ -190,6 +215,47 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 BackColor = BG,
                 Padding = new Padding(0)
             };
+            pnlContent.Resize += (s, e) => UpdateAiFloatButtonLayout();
+
+            pnlPageHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = BG,
+                Padding = new Padding(0)
+            };
+
+            aiChatPanel = new UcAiChatPanel
+            {
+                Dock = DockStyle.Right,
+                Width = 360,
+                Visible = true
+            };
+            aiChatPanel.CloseRequested += (s, e) => SetAiChatVisible(false);
+            aiChatPanel.ExpandRequested += (s, e) => ToggleAiChatWidth();
+
+            btnAiFloat = new Button
+            {
+                Text = "AI",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = Color.White,
+                BackColor = ACCENT,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(58, 58),
+                Cursor = Cursors.Hand,
+                Anchor = AnchorStyles.Right | AnchorStyles.Bottom
+            };
+            btnAiFloat.FlatAppearance.BorderSize = 0;
+            btnAiFloat.Click += BtnAiFloat_Click;
+            btnAiFloat.MouseDown += BtnAiFloat_MouseDown;
+            btnAiFloat.MouseMove += BtnAiFloat_MouseMove;
+            btnAiFloat.MouseUp += BtnAiFloat_MouseUp;
+            btnAiFloat.MouseEnter += (s, e) => btnAiFloat.BackColor = Color.FromArgb(36, 50, 108);
+            btnAiFloat.MouseLeave += (s, e) => btnAiFloat.BackColor = ACCENT;
+
+            pnlContent.Controls.Add(pnlPageHost);
+            pnlContent.Controls.Add(aiChatPanel);
+            pnlContent.Controls.Add(btnAiFloat);
+            UpdateAiFloatButtonLayout();
 
             // ── Right column (topBar + content) ──────────────────────────
             pnlRight = new Panel
@@ -209,6 +275,177 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             this.Controls.Add(sep);
             this.Controls.Add(sidebar);
         }
+
+        private void OpenAiChatPanel(string question = null)
+        {
+            SetAiChatVisible(true);
+
+            if (!string.IsNullOrWhiteSpace(question))
+            {
+                aiChatPanel.Ask(question);
+            }
+        }
+
+        private void LoadChatBotPage(bool preserveSearch = false)
+        {
+            SetAiChatVisible(false);
+            LoadPage(new frmChatBot(), preserveSearch);
+        }
+
+        private void SetAiChatVisible(bool visible)
+        {
+            if (aiChatPanel == null)
+            {
+                return;
+            }
+
+            aiChatPanel.Visible = visible;
+            if (visible)
+            {
+                aiChatPanel.ReloadFromSession();
+                aiChatPanel.BringToFront();
+            }
+
+            pnlContent.PerformLayout();
+            UpdateAiFloatButtonLayout();
+
+            if (visible)
+            {
+                aiChatPanel.FocusInput();
+            }
+        }
+
+        private void ToggleAiChatWidth()
+        {
+            if (aiChatPanel == null)
+            {
+                return;
+            }
+
+            _aiChatWide = !_aiChatWide;
+            aiChatPanel.Width = _aiChatWide ? 430 : 360;
+            pnlContent.PerformLayout();
+            UpdateAiFloatButtonLayout();
+        }
+
+        private void UpdateAiFloatButtonLayout()
+        {
+            if (pnlContent == null || btnAiFloat == null)
+            {
+                return;
+            }
+
+            int rightOffset = aiChatPanel != null && aiChatPanel.Visible ? aiChatPanel.Width + 18 : 18;
+            Point target;
+            if (_aiFloatCustomLocation.HasValue)
+            {
+                target = ClampAiFloatLocation(_aiFloatCustomLocation.Value);
+                _aiFloatCustomLocation = target;
+            }
+            else
+            {
+                int x = Math.Max(12, pnlContent.ClientSize.Width - rightOffset - btnAiFloat.Width);
+                int y = Math.Max(12, pnlContent.ClientSize.Height - btnAiFloat.Height - 18);
+                target = ClampAiFloatLocation(new Point(x, y));
+            }
+
+            btnAiFloat.Location = target;
+            ApplyCircleRegion(btnAiFloat);
+            btnAiFloat.BringToFront();
+        }
+
+        private Point ClampAiFloatLocation(Point location)
+        {
+            if (pnlContent == null || btnAiFloat == null)
+            {
+                return location;
+            }
+
+            const int margin = 8;
+            int maxX = Math.Max(margin, pnlContent.ClientSize.Width - btnAiFloat.Width - margin);
+            int maxY = Math.Max(margin, pnlContent.ClientSize.Height - btnAiFloat.Height - margin);
+            int x = Math.Max(margin, Math.Min(maxX, location.X));
+            int y = Math.Max(margin, Math.Min(maxY, location.Y));
+            return new Point(x, y);
+        }
+
+        private void BtnAiFloat_Click(object sender, EventArgs e)
+        {
+            if (_aiFloatDragMoved)
+            {
+                _aiFloatDragMoved = false;
+                return;
+            }
+
+            SetAiChatVisible(!aiChatPanel.Visible);
+        }
+
+        private void BtnAiFloat_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            _isAiFloatDragging = true;
+            _aiFloatDragMoved = false;
+            _aiFloatDragStartMouse = pnlContent.PointToClient(Cursor.Position);
+            _aiFloatStartLocation = btnAiFloat.Location;
+            btnAiFloat.Capture = true;
+            btnAiFloat.Cursor = Cursors.SizeAll;
+        }
+
+        private void BtnAiFloat_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isAiFloatDragging)
+            {
+                return;
+            }
+
+            Point currentMouse = pnlContent.PointToClient(Cursor.Position);
+            int dx = currentMouse.X - _aiFloatDragStartMouse.X;
+            int dy = currentMouse.Y - _aiFloatDragStartMouse.Y;
+
+            if (Math.Abs(dx) > 3 || Math.Abs(dy) > 3)
+            {
+                _aiFloatDragMoved = true;
+            }
+
+            Point next = ClampAiFloatLocation(new Point(
+                _aiFloatStartLocation.X + dx,
+                _aiFloatStartLocation.Y + dy));
+            _aiFloatCustomLocation = next;
+            btnAiFloat.Location = next;
+            btnAiFloat.BringToFront();
+        }
+
+        private void BtnAiFloat_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (!_isAiFloatDragging)
+            {
+                return;
+            }
+
+            _isAiFloatDragging = false;
+            btnAiFloat.Capture = false;
+            btnAiFloat.Cursor = Cursors.Hand;
+            _aiFloatCustomLocation = ClampAiFloatLocation(btnAiFloat.Location);
+        }
+
+        private static void ApplyCircleRegion(Control control)
+        {
+            if (control.Width <= 0 || control.Height <= 0)
+            {
+                return;
+            }
+
+            using (GraphicsPath path = new GraphicsPath())
+            {
+                path.AddEllipse(0, 0, control.Width, control.Height);
+                control.Region = new Region(path);
+            }
+        }
+
         private void UpdateTopBarTitle(Form page)
         {
             if (topBar == null || page == null)
@@ -231,6 +468,18 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             if (page is frmInvoices)
             {
                 topBar.TitleText = "Hóa đơn";
+                return;
+            }
+
+            if (page is frmCustomers)
+            {
+                topBar.TitleText = "Khách hàng";
+                return;
+            }
+
+            if (page is frmChatBot)
+            {
+                topBar.TitleText = "Trợ lý AI";
                 return;
             }
 
@@ -516,6 +765,8 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             AddMenuAction(menu, "Mở POS", () => LoadPage(new frmPOS()));
             AddMenuAction(menu, "Mở sản phẩm", () => LoadPage(new frmProducts()));
             AddMenuAction(menu, "Mở hóa đơn", () => LoadPage(new frmInvoices()));
+            AddMenuAction(menu, "Mở khách hàng", () => LoadPage(new frmCustomers()));
+            AddMenuAction(menu, "Mở trợ lý AI", () => LoadChatBotPage());
             AddMenuAction(menu, "Mở hàng sắp hết", () => LoadPage(new frmLowStock()));
             AddMenuAction(menu, "Mở hàng hết hạn", () => LoadPage(new frmExpiredProducts()));
 
@@ -527,6 +778,17 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 AddMenuAction(menu, "Mở báo cáo", () => LoadPage(new frmReports()));
                 AddMenuAction(menu, "Mở người dùng", () => LoadPage(new frmUsers()));
                 AddMenuHeader(menu, "Tạo nhanh");
+                AddMenuAction(menu, "Thêm hội viên mới", () =>
+                {
+                    using (var frm = new frmCustomerEdit())
+                    {
+                        frm.ShowDialog(this);
+                        if (frm.IsSavedSuccessfully)
+                        {
+                            LoadPage(new frmCustomers());
+                        }
+                    }
+                });
                 AddMenuAction(menu, "Thêm sản phẩm mới", () =>
                 {
                     using (var frm = new frmProductEdit())
@@ -776,9 +1038,21 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return true;
             }
 
+            if (MatchesQuickCommand(normalized, "tro ly ai", "tro ly", "chat bot", "chatbot", "bot", "ai"))
+            {
+                LoadChatBotPage();
+                return true;
+            }
+
             if (MatchesQuickCommand(normalized, "hoa don", "invoice"))
             {
                 LoadPageFromQuickSearch(new frmInvoices());
+                return true;
+            }
+
+            if (MatchesQuickCommand(normalized, "khach hang", "hoi vien", "customer", "member"))
+            {
+                LoadPageFromQuickSearch(new frmCustomers());
                 return true;
             }
 
@@ -873,9 +1147,21 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             _lastQuickSearchTerm = keyword.Trim();
             string normalized = NormalizeKeyword(keyword);
 
+            if (ContainsKeyword(normalized, "tro ly ai", "chat bot", "chatbot", "hoi bot", "bot"))
+            {
+                LoadChatBotPage(true);
+                return true;
+            }
+
             if (!SessionManager.IsStaff && ContainsKeyword(normalized, "nhan vien", "tai khoan", "so dien thoai", "user"))
             {
                 LoadPage(new frmUsers(), true);
+                return true;
+            }
+
+            if (ContainsKeyword(normalized, "khach hang", "hoi vien", "customer", "member"))
+            {
+                LoadPage(new frmCustomers(), true);
                 return true;
             }
 
@@ -1021,6 +1307,18 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return;
             }
 
+            if (_currentPage is frmCustomers)
+            {
+                LoadPage(new frmCustomers(), true);
+                return;
+            }
+
+            if (_currentPage is frmChatBot)
+            {
+                LoadChatBotPage(true);
+                return;
+            }
+
             if (_currentPage is frmReports)
             {
                 LoadPage(new frmReports(), true);
@@ -1065,6 +1363,11 @@ namespace SmartPOS.WinForms.UI.Forms.Main
 
         private bool CanShowAddButton(Form page)
         {
+            if (page is frmCustomers)
+            {
+                return true;
+            }
+
             return !SessionManager.IsStaff &&
                 (page is frmProducts ||
                  page is frmExpiredProducts ||
@@ -1097,6 +1400,16 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             if (page is frmUsers)
             {
                 return "Tìm theo tên, tài khoản hoặc số điện thoại...";
+            }
+
+            if (page is frmCustomers)
+            {
+                return "Tìm theo tên khách hàng, số điện thoại hoặc hạng...";
+            }
+
+            if (page is frmChatBot)
+            {
+                return "Hỏi bot về doanh thu, tồn kho, hóa đơn hoặc POS...";
             }
 
             if (page is frmCategories)
@@ -1236,7 +1549,7 @@ namespace SmartPOS.WinForms.UI.Forms.Main
 
             if (_currentPage != null && !_currentPage.IsDisposed)
             {
-                pnlContent.Controls.Remove(_currentPage);
+                pnlPageHost.Controls.Remove(_currentPage);
                 _currentPage.Dispose();
             }
 
@@ -1247,12 +1560,13 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             page.Dock = DockStyle.Fill;
             page.BackColor = BG;
 
-            pnlContent.SuspendLayout();
-            pnlContent.Controls.Add(page);
+            pnlPageHost.SuspendLayout();
+            pnlPageHost.Controls.Add(page);
             page.Show();
             page.BringToFront();
-            pnlContent.ResumeLayout(true);
-            pnlContent.PerformLayout();
+            pnlPageHost.ResumeLayout(true);
+            pnlPageHost.PerformLayout();
+            UpdateAiFloatButtonLayout();
 
             UpdateTopBarTitle(page);
             UpdateTopBarState(page);
@@ -1294,6 +1608,16 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             if (page is frmInvoices)
             {
                 return "Invoices";
+            }
+
+            if (page is frmCustomers)
+            {
+                return "Customers";
+            }
+
+            if (page is frmChatBot)
+            {
+                return "ChatBot";
             }
 
             if (page is frmUsers)
@@ -1343,10 +1667,11 @@ namespace SmartPOS.WinForms.UI.Forms.Main
         private void RefreshCurrentPage()
         {
             if (_currentPage == null || _currentPage.IsDisposed) return;
-            _currentPage.Width = pnlContent.ClientSize.Width;
-            _currentPage.Height = pnlContent.ClientSize.Height;
+            _currentPage.Width = pnlPageHost.ClientSize.Width;
+            _currentPage.Height = pnlPageHost.ClientSize.Height;
             _currentPage.PerformLayout();
             _currentPage.Refresh();
+            UpdateAiFloatButtonLayout();
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -1409,6 +1734,14 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                     LoadPage(new frmInvoices());
                     break;
 
+                case "Customers":
+                    LoadPage(new frmCustomers());
+                    break;
+
+                case "ChatBot":
+                    LoadChatBotPage();
+                    break;
+
                 case "Reports":
                     LoadPage(new frmReports());
                     break;
@@ -1435,6 +1768,8 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 case "Dashboard":
                 case "POS":
                 case "Invoices":
+                case "Customers":
+                case "ChatBot":
                 case "Products":
                 case "ExpiredProducts":
                 case "LowStocks":

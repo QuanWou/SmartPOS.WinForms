@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using Dapper;
+using SmartPOS.WinForms.Common.Constants;
 using SmartPOS.WinForms.DAL.Data;
 using SmartPOS.WinForms.DAL.Interfaces;
 using SmartPOS.WinForms.DTO.Entities;
@@ -25,6 +26,10 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaHD,
                     NgayLap,
                     MaNV,
+                    MaKH,
+                    TongTienTruocGiam,
+                    DiemSuDung,
+                    GiamGiaDiem,
                     TongTien,
                     GhiChu,
                     TrangThai
@@ -41,6 +46,10 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaHD,
                     NgayLap,
                     MaNV,
+                    MaKH,
+                    TongTienTruocGiam,
+                    DiemSuDung,
+                    GiamGiaDiem,
                     TongTien,
                     GhiChu,
                     TrangThai
@@ -73,17 +82,77 @@ namespace SmartPOS.WinForms.DAL.Repositories
             {
                 try
                 {
-                    decimal tongTien = 0;
+                    decimal tongTienTruocGiam = 0;
                     foreach (var item in request.ChiTietHoaDon)
                     {
-                        tongTien += item.ThanhTien;
+                        tongTienTruocGiam += item.ThanhTien;
                     }
+
+                    CustomerDTO customer = null;
+                    decimal giamGiaDiem = 0;
+                    int diemTichLuy = 0;
+
+                    if (request.DiemSuDung < 0)
+                    {
+                        throw new InvalidOperationException("Số điểm sử dụng không hợp lệ.");
+                    }
+
+                    if (request.MaKH.HasValue && request.MaKH.Value > 0)
+                    {
+                        customer = scope.Connection.QueryFirstOrDefault<CustomerDTO>(
+                            @"
+                            SELECT
+                                MaKH,
+                                HoTen,
+                                SoDienThoai,
+                                DiaChi,
+                                NgayThamGia,
+                                HangThanhVien,
+                                TongChiTieu,
+                                SoLanMua,
+                                DiemHienCo,
+                                TongDiemDaDoi,
+                                TrangThai,
+                                NgayCapNhat
+                            FROM Customers WITH (UPDLOCK, ROWLOCK)
+                            WHERE MaKH = @MaKH
+                              AND TrangThai = 1",
+                            new { MaKH = request.MaKH.Value },
+                            scope.Transaction);
+
+                        if (customer == null)
+                        {
+                            throw new InvalidOperationException("Khách hàng không tồn tại hoặc đã ngừng hoạt động.");
+                        }
+
+                        if (request.DiemSuDung > customer.DiemHienCo)
+                        {
+                            throw new InvalidOperationException("Số điểm đổi vượt quá điểm hiện có của khách hàng.");
+                        }
+
+                        giamGiaDiem = request.DiemSuDung * LoyaltyConstants.RedeemValuePerPoint;
+                        if (giamGiaDiem > tongTienTruocGiam)
+                        {
+                            throw new InvalidOperationException("Giá trị điểm đổi không được vượt quá tổng tiền đơn hàng.");
+                        }
+                    }
+                    else if (request.DiemSuDung > 0)
+                    {
+                        throw new InvalidOperationException("Vui lòng chọn khách hàng trước khi đổi điểm.");
+                    }
+
+                    decimal tongTien = tongTienTruocGiam - giamGiaDiem;
+                    diemTichLuy = CalculateEarnedPoints(tongTien);
 
                     string sqlInvoice = @"
                         INSERT INTO Invoices
                         (
                             NgayLap,
                             MaNV,
+                            MaKH,
+                            TongTienTruocGiam,
+                            DiemSuDung,
+                            GiamGiaDiem,
                             TongTien,
                             GhiChu,
                             TrangThai
@@ -92,6 +161,10 @@ namespace SmartPOS.WinForms.DAL.Repositories
                         (
                             GETDATE(),
                             @MaNV,
+                            @MaKH,
+                            @TongTienTruocGiam,
+                            @DiemSuDung,
+                            @GiamGiaDiem,
                             @TongTien,
                             @GhiChu,
                             @TrangThai
@@ -103,6 +176,10 @@ namespace SmartPOS.WinForms.DAL.Repositories
                         new
                         {
                             request.MaNV,
+                            request.MaKH,
+                            TongTienTruocGiam = tongTienTruocGiam,
+                            request.DiemSuDung,
+                            GiamGiaDiem = giamGiaDiem,
                             TongTien = tongTien,
                             request.GhiChu,
                             TrangThai = "Paid"
@@ -284,6 +361,127 @@ namespace SmartPOS.WinForms.DAL.Repositories
                         }
                     }
 
+                    if (customer != null)
+                    {
+                        if (request.DiemSuDung > 0)
+                        {
+                            int redeemRowsAffected = scope.Connection.Execute(
+                                @"
+                                UPDATE Customers
+                                SET
+                                    DiemHienCo = DiemHienCo - @DiemSuDung,
+                                    TongDiemDaDoi = TongDiemDaDoi + @DiemSuDung,
+                                    NgayCapNhat = GETDATE()
+                                WHERE MaKH = @MaKH
+                                  AND DiemHienCo >= @DiemSuDung",
+                                new
+                                {
+                                    customer.MaKH,
+                                    request.DiemSuDung
+                                },
+                                scope.Transaction);
+
+                            if (redeemRowsAffected <= 0)
+                            {
+                                throw new InvalidOperationException("Điểm khách hàng vừa thay đổi. Vui lòng tải lại và thử lại.");
+                            }
+
+                            scope.Connection.Execute(
+                                @"
+                                INSERT INTO CustomerPointTransactions
+                                (
+                                    MaKH,
+                                    MaHD,
+                                    MaNV,
+                                    LoaiGiaoDich,
+                                    Diem,
+                                    GiaTriGiam,
+                                    GhiChu
+                                )
+                                VALUES
+                                (
+                                    @MaKH,
+                                    @MaHD,
+                                    @MaNV,
+                                    @LoaiGiaoDich,
+                                    @Diem,
+                                    @GiaTriGiam,
+                                    @GhiChu
+                                )",
+                                new
+                                {
+                                    customer.MaKH,
+                                    MaHD = maHD,
+                                    request.MaNV,
+                                    LoaiGiaoDich = LoyaltyConstants.TransactionRedeem,
+                                    Diem = -request.DiemSuDung,
+                                    GiaTriGiam = giamGiaDiem,
+                                    GhiChu = "Đổi điểm giảm giá hóa đơn"
+                                },
+                                scope.Transaction);
+                        }
+
+                        decimal newTotalSpend = customer.TongChiTieu + tongTien;
+                        int newPurchaseCount = customer.SoLanMua + 1;
+                        string newRank = ResolveMemberRank(newTotalSpend, newPurchaseCount);
+
+                        scope.Connection.Execute(
+                            @"
+                            UPDATE Customers
+                            SET
+                                TongChiTieu = TongChiTieu + @TongTien,
+                                SoLanMua = SoLanMua + 1,
+                                DiemHienCo = DiemHienCo + @DiemTichLuy,
+                                HangThanhVien = @HangThanhVien,
+                                NgayCapNhat = GETDATE()
+                            WHERE MaKH = @MaKH",
+                            new
+                            {
+                                customer.MaKH,
+                                TongTien = tongTien,
+                                DiemTichLuy = diemTichLuy,
+                                HangThanhVien = newRank
+                            },
+                            scope.Transaction);
+
+                        if (diemTichLuy > 0)
+                        {
+                            scope.Connection.Execute(
+                                @"
+                                INSERT INTO CustomerPointTransactions
+                                (
+                                    MaKH,
+                                    MaHD,
+                                    MaNV,
+                                    LoaiGiaoDich,
+                                    Diem,
+                                    GiaTriGiam,
+                                    GhiChu
+                                )
+                                VALUES
+                                (
+                                    @MaKH,
+                                    @MaHD,
+                                    @MaNV,
+                                    @LoaiGiaoDich,
+                                    @Diem,
+                                    @GiaTriGiam,
+                                    @GhiChu
+                                )",
+                                new
+                                {
+                                    customer.MaKH,
+                                    MaHD = maHD,
+                                    request.MaNV,
+                                    LoaiGiaoDich = LoyaltyConstants.TransactionEarn,
+                                    Diem = diemTichLuy,
+                                    GiaTriGiam = 0,
+                                    GhiChu = "Tích điểm từ hóa đơn"
+                                },
+                                scope.Transaction);
+                        }
+                    }
+
                     scope.Commit();
                     return maHD;
                 }
@@ -307,6 +505,36 @@ namespace SmartPOS.WinForms.DAL.Repositories
                 MaHD = maHD,
                 TrangThai = trangThai
             });
+        }
+
+        private int CalculateEarnedPoints(decimal amount)
+        {
+            if (amount <= 0)
+            {
+                return 0;
+            }
+
+            return (int)Math.Floor(amount / LoyaltyConstants.EarnAmountPerPoint);
+        }
+
+        private string ResolveMemberRank(decimal totalSpend, int purchaseCount)
+        {
+            if (totalSpend >= 15000000 || purchaseCount >= 15)
+            {
+                return LoyaltyConstants.RankPlatinum;
+            }
+
+            if (totalSpend >= 5000000 || purchaseCount >= 5)
+            {
+                return LoyaltyConstants.RankGold;
+            }
+
+            if (totalSpend >= 1000000 || purchaseCount >= 2)
+            {
+                return LoyaltyConstants.RankSilver;
+            }
+
+            return LoyaltyConstants.RankMember;
         }
     }
 }

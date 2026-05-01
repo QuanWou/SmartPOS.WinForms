@@ -4,6 +4,7 @@ using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
 using SmartPOS.WinForms.DTO.Requests;
 using SmartPOS.WinForms.DTO.Responses;
+using SmartPOS.WinForms.UI.Forms.Customers;
 using SmartPOS.WinForms.UI.Forms.Invoices;
 using SmartPOS.WinForms.UI.Forms.Shared;
 using SmartPOS.WinForms.UI.Interfaces;
@@ -32,6 +33,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private static readonly Color SoftDangerText = Color.FromArgb(190, 96, 96);
         private readonly IProductService _productService;
         private readonly IInvoiceService _invoiceService;
+        private readonly ICustomerService _customerService;
         private static readonly Color CartCardColor = Color.White;
         private static readonly Color CartBorderSoft = Color.FromArgb(236, 239, 246);
         private static readonly Color QtyBg = Color.FromArgb(245, 247, 252);
@@ -56,21 +58,34 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private Button btnPhoneScan;
         private Button btnThanhToan;
         private Button btnLamMoi;
+        private Button btnSelectCustomer;
+        private Button btnClearCustomer;
 
         private FlowLayoutPanel flpProducts;
         private FlowLayoutPanel flpCartItems;
 
+        private Label lblCustomerTitle;
+        private Label lblCustomerName;
+        private Label lblCustomerPoints;
+        private Label lblRedeemPoints;
+        private NumericUpDown nudRedeemPoints;
+        private Label lblTamTinh;
+        private Label lblTamTinhValue;
+        private Label lblGiamGiaDiem;
+        private Label lblGiamGiaDiemValue;
         private Label lblTongMon;
         private Label lblTongTien;
         private Label lblTongTienValue;
 
         private List<ProductDTO> _products;
         private List<CartItem> _cartItems;
+        private CustomerDTO _selectedCustomer;
 
         public frmPOS()
         {
             _productService = new ProductService();
             _invoiceService = new InvoiceService();
+            _customerService = new CustomerService();
             _cartItems = new List<CartItem>();
 
             InitializeComponent();
@@ -94,6 +109,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private void FrmPOS_Load(object sender, EventArgs e)
         {
             LoadProducts();
+            UpdateSelectedCustomerView();
             RefreshCartView();
         }
 
@@ -303,18 +319,131 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlCartFooter = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 120,
+                Height = 284,
                 BackColor = SurfaceColor,
                 Padding = new Padding(16, 12, 16, 16)
             };
 
+            lblCustomerTitle = new Label
+            {
+                Text = "Khách hàng",
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(16, 12)
+            };
+
+            lblCustomerName = new Label
+            {
+                Text = "Khách lẻ",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = PrimaryDark,
+                AutoSize = false,
+                Size = new Size(150, 22),
+                Location = new Point(16, 32)
+            };
+
+            lblCustomerPoints = new Label
+            {
+                Text = "Điểm: 0",
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = TextSoft,
+                AutoSize = false,
+                Size = new Size(130, 20),
+                Location = new Point(16, 54)
+            };
+
+            btnSelectCustomer = new Button
+            {
+                Text = "Chọn",
+                Size = new Size(64, 28),
+                Location = new Point(196, 28),
+                BackColor = FieldColor,
+                ForeColor = PrimaryDark,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnSelectCustomer.FlatAppearance.BorderSize = 0;
+            btnSelectCustomer.Click += BtnSelectCustomer_Click;
+
+            btnClearCustomer = new Button
+            {
+                Text = "Xóa",
+                Size = new Size(50, 28),
+                Location = new Point(266, 28),
+                BackColor = FieldColor,
+                ForeColor = DangerColor,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnClearCustomer.FlatAppearance.BorderSize = 0;
+            btnClearCustomer.Click += BtnClearCustomer_Click;
+
+            lblRedeemPoints = new Label
+            {
+                Text = "Đổi điểm",
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(16, 84)
+            };
+
+            nudRedeemPoints = new NumericUpDown
+            {
+                Location = new Point(92, 80),
+                Size = new Size(80, 26),
+                Minimum = 0,
+                Maximum = 0,
+                ThousandsSeparator = true,
+                Enabled = false
+            };
+            nudRedeemPoints.ValueChanged += (s, e) => RefreshCartSummary();
+
+            lblTamTinh = new Label
+            {
+                Text = "Tạm tính",
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(16, 118)
+            };
+
+            lblTamTinhValue = new Label
+            {
+                Text = "0 đ",
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+                ForeColor = PrimaryDark,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleRight,
+                Size = new Size(150, 22),
+                Location = new Point(166, 114)
+            };
+
+            lblGiamGiaDiem = new Label
+            {
+                Text = "Giảm từ điểm",
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(16, 142)
+            };
+
+            lblGiamGiaDiemValue = new Label
+            {
+                Text = "0 đ",
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(70, 160, 100),
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleRight,
+                Size = new Size(150, 22),
+                Location = new Point(166, 138)
+            };
+
             lblTongTien = new Label
             {
-                Text = "T\u1ed5ng ti\u1ec1n",
+                Text = "Cần thanh toán",
                 Font = new Font("Segoe UI", 10F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(16, 14)
+                Location = new Point(16, 166)
             };
 
             lblTongTienValue = new Label
@@ -323,14 +452,14 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold),
                 ForeColor = PrimaryDark,
                 AutoSize = true,
-                Location = new Point(16, 38)
+                Location = new Point(16, 186)
             };
 
             btnThanhToan = new Button
             {
                 Text = "Thanh to\u00e1n",
                 Size = new Size(310, 38),
-                Location = new Point(16, 74),
+                Location = new Point(16, 234),
                 BackColor = PrimaryDark,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
@@ -338,6 +467,17 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             btnThanhToan.FlatAppearance.BorderSize = 0;
             btnThanhToan.Click += BtnThanhToan_Click;
 
+            pnlCartFooter.Controls.Add(lblCustomerTitle);
+            pnlCartFooter.Controls.Add(lblCustomerName);
+            pnlCartFooter.Controls.Add(lblCustomerPoints);
+            pnlCartFooter.Controls.Add(btnSelectCustomer);
+            pnlCartFooter.Controls.Add(btnClearCustomer);
+            pnlCartFooter.Controls.Add(lblRedeemPoints);
+            pnlCartFooter.Controls.Add(nudRedeemPoints);
+            pnlCartFooter.Controls.Add(lblTamTinh);
+            pnlCartFooter.Controls.Add(lblTamTinhValue);
+            pnlCartFooter.Controls.Add(lblGiamGiaDiem);
+            pnlCartFooter.Controls.Add(lblGiamGiaDiemValue);
             pnlCartFooter.Controls.Add(lblTongTien);
             pnlCartFooter.Controls.Add(lblTongTienValue);
             pnlCartFooter.Controls.Add(btnThanhToan);
@@ -498,10 +638,75 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             RenderCartItems();
 
             int tongMon = _cartItems.Sum(x => x.SoLuong);
-            decimal tongTien = _cartItems.Sum(x => x.SoLuong * x.DonGia);
-
             lblTongMon.Text = tongMon + " s\u1ea3n ph\u1ea9m";
-            lblTongTienValue.Text = tongTien.ToString("N0") + " \u0111";
+            RefreshCartSummary();
+        }
+
+        private void RefreshCartSummary()
+        {
+            decimal tamTinh = GetCartSubtotal();
+            int maxRedeemPoints = GetMaxRedeemPoints(tamTinh);
+
+            if (nudRedeemPoints != null)
+            {
+                if (nudRedeemPoints.Value > maxRedeemPoints)
+                {
+                    nudRedeemPoints.Value = maxRedeemPoints;
+                }
+
+                if (nudRedeemPoints.Maximum != maxRedeemPoints)
+                {
+                    nudRedeemPoints.Maximum = maxRedeemPoints;
+                }
+
+                nudRedeemPoints.Enabled = _selectedCustomer != null && maxRedeemPoints > 0;
+            }
+
+            decimal discount = GetPointDiscount();
+            decimal payable = Math.Max(0, tamTinh - discount);
+
+            if (lblTamTinhValue != null)
+            {
+                lblTamTinhValue.Text = tamTinh.ToString("N0") + " \u0111";
+            }
+
+            if (lblGiamGiaDiemValue != null)
+            {
+                lblGiamGiaDiemValue.Text = discount.ToString("N0") + " \u0111";
+            }
+
+            lblTongTienValue.Text = payable.ToString("N0") + " \u0111";
+        }
+
+        private decimal GetCartSubtotal()
+        {
+            return _cartItems.Sum(x => x.SoLuong * x.DonGia);
+        }
+
+        private decimal GetPointDiscount()
+        {
+            if (nudRedeemPoints == null || _selectedCustomer == null)
+            {
+                return 0;
+            }
+
+            return _customerService.CalculateRedeemValue((int)nudRedeemPoints.Value);
+        }
+
+        private decimal GetPayableTotal()
+        {
+            return Math.Max(0, GetCartSubtotal() - GetPointDiscount());
+        }
+
+        private int GetMaxRedeemPoints(decimal subtotal)
+        {
+            if (_selectedCustomer == null || subtotal <= 0)
+            {
+                return 0;
+            }
+
+            int maxByOrder = (int)Math.Floor(subtotal / 100m);
+            return Math.Max(0, Math.Min(_selectedCustomer.DiemHienCo, maxByOrder));
         }
 
         private void RenderCartItems()
@@ -902,6 +1107,52 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             }
         }
 
+        private void BtnSelectCustomer_Click(object sender, EventArgs e)
+        {
+            using (var frm = new frmCustomerLookup())
+            {
+                if (frm.ShowDialog(this) != DialogResult.OK || frm.SelectedCustomer == null)
+                {
+                    return;
+                }
+
+                _selectedCustomer = frm.SelectedCustomer;
+                UpdateSelectedCustomerView();
+                RefreshCartSummary();
+            }
+        }
+
+        private void BtnClearCustomer_Click(object sender, EventArgs e)
+        {
+            _selectedCustomer = null;
+            if (nudRedeemPoints != null)
+            {
+                nudRedeemPoints.Value = 0;
+            }
+            UpdateSelectedCustomerView();
+            RefreshCartSummary();
+        }
+
+        private void UpdateSelectedCustomerView()
+        {
+            if (lblCustomerName == null)
+            {
+                return;
+            }
+
+            if (_selectedCustomer == null)
+            {
+                lblCustomerName.Text = "Khách lẻ";
+                lblCustomerPoints.Text = "Điểm: 0";
+                btnClearCustomer.Enabled = false;
+                return;
+            }
+
+            lblCustomerName.Text = _selectedCustomer.HoTen;
+            lblCustomerPoints.Text = "Điểm: " + _selectedCustomer.DiemHienCo.ToString("N0") + " | " + _selectedCustomer.HangThanhVien;
+            btnClearCustomer.Enabled = true;
+        }
+
         private void BtnLamMoi_Click(object sender, EventArgs e)
         {
             txtSearch.Clear();
@@ -922,25 +1173,45 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 return;
             }
 
-            decimal tongTien = _cartItems.Sum(x => x.SoLuong * x.DonGia);
+            int diemSuDung = nudRedeemPoints != null ? (int)nudRedeemPoints.Value : 0;
+            decimal tongTien = GetPayableTotal();
+
+            OperationResult pointValidation = _customerService.ValidatePointRedemption(
+                _selectedCustomer != null ? (int?)_selectedCustomer.MaKH : null,
+                diemSuDung,
+                GetCartSubtotal());
+            if (!pointValidation.IsSuccess)
+            {
+                MessageBox.Show(pointValidation.Message, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             string paymentMethodLabel;
 
-            using (frmCashPayment frmCash = new frmCashPayment(tongTien))
+            if (tongTien <= 0)
             {
-                DialogResult dialogResult = frmCash.ShowDialog(this);
-
-                if (dialogResult != DialogResult.OK || !frmCash.IsConfirmed)
+                paymentMethodLabel = "Đổi điểm toàn bộ";
+            }
+            else
+            {
+                using (frmCashPayment frmCash = new frmCashPayment(tongTien))
                 {
-                    return;
-                }
+                    DialogResult dialogResult = frmCash.ShowDialog(this);
 
-                paymentMethodLabel = frmCash.PaymentMethodLabel;
+                    if (dialogResult != DialogResult.OK || !frmCash.IsConfirmed)
+                    {
+                        return;
+                    }
+
+                    paymentMethodLabel = frmCash.PaymentMethodLabel;
+                }
             }
 
             CheckoutRequest request = new CheckoutRequest
             {
                 MaNV = SessionManager.CurrentUser.MaNV,
+                MaKH = _selectedCustomer != null ? (int?)_selectedCustomer.MaKH : null,
+                DiemSuDung = diemSuDung,
                 GhiChu = "B\u00e1n t\u1ea1i qu\u1ea7y - " + paymentMethodLabel,
                 ChiTietHoaDon = _cartItems.Select(x => new InvoiceDetailDTO
                 {
@@ -964,6 +1235,12 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 int? maHD = result.DataId;
 
                 _cartItems.Clear();
+                _selectedCustomer = null;
+                if (nudRedeemPoints != null)
+                {
+                    nudRedeemPoints.Value = 0;
+                }
+                UpdateSelectedCustomerView();
                 RefreshCartView();
                 LoadProducts();
 

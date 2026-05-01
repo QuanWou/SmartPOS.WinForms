@@ -16,11 +16,13 @@ namespace SmartPOS.WinForms.BLL.Services
     {
         private readonly IInvoiceRepository _invoiceRepository;
         private readonly IProductRepository _productRepository;
+        private readonly ICustomerRepository _customerRepository;
 
         public InvoiceService()
         {
             _invoiceRepository = new InvoiceRepository();
             _productRepository = new ProductRepository();
+            _customerRepository = new CustomerRepository();
         }
 
         public IEnumerable<InvoiceDTO> GetAll()
@@ -58,6 +60,7 @@ namespace SmartPOS.WinForms.BLL.Services
 
             try
             {
+                decimal tongTienTruocGiam = 0;
                 foreach (var item in request.ChiTietHoaDon)
                 {
                     ProductDTO product = _productRepository.GetById(item.MaSP);
@@ -90,6 +93,47 @@ namespace SmartPOS.WinForms.BLL.Services
 
                     item.DonGiaLucBan = product.GiaBan;
                     item.ThanhTien = item.SoLuong * item.DonGiaLucBan;
+                    tongTienTruocGiam += item.ThanhTien;
+                }
+
+                if (request.MaKH.HasValue)
+                {
+                    CustomerDTO customer = _customerRepository.GetById(request.MaKH.Value);
+                    if (customer == null || !customer.TrangThai)
+                    {
+                        return new OperationResult
+                        {
+                            IsSuccess = false,
+                            Message = "Khách hàng không tồn tại hoặc đã ngừng hoạt động."
+                        };
+                    }
+
+                    if (request.DiemSuDung > customer.DiemHienCo)
+                    {
+                        return new OperationResult
+                        {
+                            IsSuccess = false,
+                            Message = "Số điểm đổi vượt quá điểm hiện có của khách hàng."
+                        };
+                    }
+                }
+                else if (request.DiemSuDung > 0)
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = "Vui lòng chọn khách hàng trước khi đổi điểm."
+                    };
+                }
+
+                decimal giamGiaDiem = request.DiemSuDung * LoyaltyConstants.RedeemValuePerPoint;
+                if (giamGiaDiem > tongTienTruocGiam)
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = "Giá trị điểm đổi không được vượt quá tổng tiền đơn hàng."
+                    };
                 }
 
                 int maHD = _invoiceRepository.Insert(request);
@@ -185,6 +229,24 @@ namespace SmartPOS.WinForms.BLL.Services
                 {
                     IsSuccess = false,
                     Message = "Nhân viên thanh toán không hợp lệ."
+                };
+            }
+
+            if (request.MaKH.HasValue && !ValidationHelper.IsPositiveInt(request.MaKH.Value))
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = "Khách hàng không hợp lệ."
+                };
+            }
+
+            if (!ValidationHelper.IsNonNegativeInt(request.DiemSuDung))
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = "Số điểm sử dụng không hợp lệ."
                 };
             }
 

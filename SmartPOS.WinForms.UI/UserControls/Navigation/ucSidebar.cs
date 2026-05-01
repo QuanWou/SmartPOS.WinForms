@@ -48,7 +48,9 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
         {
             ("⊞",  "Tổng quan",            "Dashboard"),
             ("⌁",  "Bán hàng",             "POS"),
+            ("AI",  "Trợ lý AI",            "ChatBot"),
             ("🧾", "Hóa đơn",              "Invoices"),
+            ("👥", "Khách hàng",           "Customers"),
             ("👤", "Người dùng",           "Users"),
             ("◔",  "Báo cáo",              "Reports"),
             ("---","",                     "sep1"),
@@ -160,7 +162,9 @@ namespace SmartPOS.WinForms.UI.UserControls.Navigation
             {
                 case "Dashboard":
                 case "POS":
+                case "ChatBot":
                 case "Invoices":
+                case "Customers":
                 case "Products":
                 case "ExpiredProducts":
                 case "LowStocks":

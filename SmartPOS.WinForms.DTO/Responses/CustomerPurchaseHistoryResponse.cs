@@ -1,20 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System;
 
-namespace SmartPOS.WinForms.DTO.Entities
+namespace SmartPOS.WinForms.DTO.Responses
 {
-    public class InvoiceDTO
+    public class CustomerPurchaseHistoryResponse
     {
         public int MaHD { get; set; }
 
         public DateTime NgayLap { get; set; }
-
-        public int MaNV { get; set; }
-
-        public int? MaKH { get; set; }
 
         public decimal TongTienTruocGiam { get; set; }
 
@@ -23,8 +15,6 @@ namespace SmartPOS.WinForms.DTO.Entities
         public decimal GiamGiaDiem { get; set; }
 
         public decimal TongTien { get; set; }
-
-        public string GhiChu { get; set; }
 
         public string TrangThai { get; set; }
     }
