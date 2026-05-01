@@ -228,29 +228,22 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             {
                 Dock = DockStyle.Right,
                 Width = 360,
-                Visible = true
+                Visible = false
             };
             aiChatPanel.CloseRequested += (s, e) => SetAiChatVisible(false);
             aiChatPanel.ExpandRequested += (s, e) => ToggleAiChatWidth();
 
-            btnAiFloat = new Button
+            btnAiFloat = new RobotAiButton
             {
-                Text = "AI",
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = ACCENT,
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(58, 58),
+                Size = new Size(50, 50),
                 Cursor = Cursors.Hand,
                 Anchor = AnchorStyles.Right | AnchorStyles.Bottom
             };
-            btnAiFloat.FlatAppearance.BorderSize = 0;
+
             btnAiFloat.Click += BtnAiFloat_Click;
             btnAiFloat.MouseDown += BtnAiFloat_MouseDown;
             btnAiFloat.MouseMove += BtnAiFloat_MouseMove;
             btnAiFloat.MouseUp += BtnAiFloat_MouseUp;
-            btnAiFloat.MouseEnter += (s, e) => btnAiFloat.BackColor = Color.FromArgb(36, 50, 108);
-            btnAiFloat.MouseLeave += (s, e) => btnAiFloat.BackColor = ACCENT;
 
             pnlContent.Controls.Add(pnlPageHost);
             pnlContent.Controls.Add(aiChatPanel);
@@ -335,8 +328,16 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return;
             }
 
-            int rightOffset = aiChatPanel != null && aiChatPanel.Visible ? aiChatPanel.Width + 18 : 18;
+            // Nếu panel AI đang mở, nút nổi sẽ nằm bên trái panel chat.
+            // Nếu panel AI đang đóng, nút nằm sát góc phải màn hình.
+            int rightOffset = aiChatPanel != null && aiChatPanel.Visible
+                ? aiChatPanel.Width + 24
+                : 24;
+
+            int bottomOffset = 24;
+
             Point target;
+
             if (_aiFloatCustomLocation.HasValue)
             {
                 target = ClampAiFloatLocation(_aiFloatCustomLocation.Value);
@@ -344,13 +345,16 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             }
             else
             {
-                int x = Math.Max(12, pnlContent.ClientSize.Width - rightOffset - btnAiFloat.Width);
-                int y = Math.Max(12, pnlContent.ClientSize.Height - btnAiFloat.Height - 18);
+                int x = pnlContent.ClientSize.Width - rightOffset - btnAiFloat.Width;
+                int y = pnlContent.ClientSize.Height - bottomOffset - btnAiFloat.Height;
+
                 target = ClampAiFloatLocation(new Point(x, y));
             }
 
             btnAiFloat.Location = target;
-            ApplyCircleRegion(btnAiFloat);
+
+            
+
             btnAiFloat.BringToFront();
         }
 
@@ -361,11 +365,24 @@ namespace SmartPOS.WinForms.UI.Forms.Main
                 return location;
             }
 
-            const int margin = 8;
-            int maxX = Math.Max(margin, pnlContent.ClientSize.Width - btnAiFloat.Width - margin);
-            int maxY = Math.Max(margin, pnlContent.ClientSize.Height - btnAiFloat.Height - margin);
-            int x = Math.Max(margin, Math.Min(maxX, location.X));
-            int y = Math.Max(margin, Math.Min(maxY, location.Y));
+            const int leftMargin = 12;
+            const int topMargin = 12;
+            const int bottomMargin = 12;
+
+            // Nếu panel AI đang mở thì chừa vùng bên phải cho panel chat
+            int rightReserved = aiChatPanel != null && aiChatPanel.Visible
+                ? aiChatPanel.Width + 12
+                : 12;
+
+            int maxX = pnlContent.ClientSize.Width - btnAiFloat.Width - rightReserved;
+            int maxY = pnlContent.ClientSize.Height - btnAiFloat.Height - bottomMargin;
+
+            maxX = Math.Max(leftMargin, maxX);
+            maxY = Math.Max(topMargin, maxY);
+
+            int x = Math.Max(leftMargin, Math.Min(maxX, location.X));
+            int y = Math.Max(topMargin, Math.Min(maxY, location.Y));
+
             return new Point(x, y);
         }
 
@@ -1833,5 +1850,296 @@ namespace SmartPOS.WinForms.UI.Forms.Main
             }
             base.Dispose(disposing);
         }
+
+
+        // code hiện tại...
+
+        private class RobotAiButton : Button
+        {
+            private bool _hover;
+
+            private static readonly Color PrimaryDark = Color.FromArgb(43, 122, 241);
+            private static readonly Color PrimaryLight = Color.FromArgb(70, 160, 255);
+            private static readonly Color Face = Color.FromArgb(245, 248, 255);
+            private static readonly Color DarkArea = Color.FromArgb(20, 40, 70);
+            private static readonly Color EyeGlow = Color.FromArgb(0, 230, 255);
+            private static readonly Color Mouth = Color.FromArgb(20, 40, 70);
+            private static readonly Color Online = Color.FromArgb(34, 197, 94);
+
+            public RobotAiButton()
+            {
+                Text = string.Empty;
+                FlatStyle = FlatStyle.Flat;
+                BackColor = Color.Transparent;
+                ForeColor = Color.White;
+                TabStop = false;
+
+                FlatAppearance.BorderSize = 0;
+                FlatAppearance.MouseDownBackColor = Color.Transparent;
+                FlatAppearance.MouseOverBackColor = Color.Transparent;
+
+                SetStyle(
+                    ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.UserPaint |
+                    ControlStyles.OptimizedDoubleBuffer |
+                    ControlStyles.ResizeRedraw |
+                    ControlStyles.SupportsTransparentBackColor,
+                    true);
+            }
+
+            protected override void OnMouseEnter(EventArgs e)
+            {
+                _hover = true;
+                Invalidate();
+                base.OnMouseEnter(e);
+            }
+
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                _hover = false;
+                Invalidate();
+                base.OnMouseLeave(e);
+            }
+
+            protected override void OnSizeChanged(EventArgs e)
+            {
+                base.OnSizeChanged(e);
+
+                // Không bo sát quá để tránh cắt mất glow.
+                using (GraphicsPath path = new GraphicsPath())
+                {
+                    path.AddEllipse(0, 0, Width, Height);
+                    Region = new Region(path);
+                }
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                e.Graphics.CompositingQuality = CompositingQuality.HighQuality;
+                e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                e.Graphics.Clear(Parent?.BackColor ?? Color.White);
+
+                DrawGlow(e.Graphics);
+                DrawMainCircle(e.Graphics);
+                DrawRobot(e.Graphics);
+                DrawOnlineDot(e.Graphics);
+            }
+
+            private void DrawGlow(Graphics g)
+            {
+                Rectangle glowRect = new Rectangle(1, 1, Width - 2, Height - 2);
+
+                using (GraphicsPath glowPath = new GraphicsPath())
+                {
+                    glowPath.AddEllipse(glowRect);
+
+                    using (PathGradientBrush glowBrush = new PathGradientBrush(glowPath))
+                    {
+                        glowBrush.CenterColor = Color.FromArgb(_hover ? 95 : 65, 70, 160, 255);
+                        glowBrush.SurroundColors = new[] { Color.FromArgb(0, 70, 160, 255) };
+                        g.FillPath(glowBrush, glowPath);
+                    }
+                }
+            }
+
+            private void DrawMainCircle(Graphics g)
+            {
+                Rectangle circleRect = GetCircleRect();
+
+                using (LinearGradientBrush brush = new LinearGradientBrush(
+                    circleRect,
+                    _hover ? PrimaryLight : PrimaryDark,
+                    _hover ? PrimaryDark : PrimaryLight,
+                    LinearGradientMode.Vertical))
+                {
+                    g.FillEllipse(brush, circleRect);
+                }
+
+                using (Pen borderPen = new Pen(Color.FromArgb(110, Color.White), 1))
+                {
+                    g.DrawEllipse(borderPen, circleRect);
+                }
+            }
+
+            private Rectangle GetCircleRect()
+            {
+                return new Rectangle(5, 5, Width - 11, Height - 11);
+            }
+
+            private void DrawRobot(Graphics g)
+            {
+                Rectangle bounds = GetCircleRect();
+
+                float centerX = bounds.X + bounds.Width / 2f;
+
+                float faceW = bounds.Width * 0.62f;
+                float faceH = bounds.Height * 0.46f;
+                float faceX = centerX - faceW / 2f;
+                float faceY = bounds.Y + bounds.Height * 0.36f;
+
+                RectangleF faceRect = new RectangleF(faceX, faceY, faceW, faceH);
+
+                DrawAntenna(g, bounds, faceRect);
+                DrawEars(g, faceRect);
+                DrawFace(g, faceRect);
+                DrawEyeArea(g, faceRect);
+                DrawMouth(g, faceRect);
+            }
+
+            private void DrawAntenna(Graphics g, Rectangle bounds, RectangleF faceRect)
+            {
+                float centerX = bounds.X + bounds.Width / 2f;
+                float startY = faceRect.Y - 2;
+                float topY = bounds.Y + bounds.Height * 0.20f;
+
+                using (Pen pen = new Pen(Face, 2f))
+                {
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+
+                    g.DrawLine(pen, centerX, startY, centerX, topY + 4);
+                    g.DrawLine(pen, centerX, topY + 4, centerX - 5, topY);
+                    g.DrawLine(pen, centerX, topY + 4, centerX + 5, topY);
+                }
+
+                using (SolidBrush brush = new SolidBrush(Face))
+                {
+                    g.FillEllipse(brush, centerX - 2.5f, topY - 2.5f, 5, 5);
+                }
+            }
+
+            private void DrawEars(Graphics g, RectangleF faceRect)
+            {
+                float earW = faceRect.Width * 0.16f;
+                float earH = faceRect.Height * 0.42f;
+                float earY = faceRect.Y + faceRect.Height * 0.34f;
+
+                using (SolidBrush brush = new SolidBrush(Face))
+                {
+                    g.FillEllipse(brush, faceRect.X - earW * 0.55f, earY, earW, earH);
+                    g.FillEllipse(brush, faceRect.Right - earW * 0.45f, earY, earW, earH);
+                }
+            }
+
+            private void DrawFace(Graphics g, RectangleF faceRect)
+            {
+                using (GraphicsPath facePath = RoundedRectF(faceRect, faceRect.Height / 2f))
+                using (SolidBrush faceBrush = new SolidBrush(Face))
+                using (Pen facePen = new Pen(Color.FromArgb(210, 225, 245), 1))
+                {
+                    g.FillPath(faceBrush, facePath);
+                    g.DrawPath(facePen, facePath);
+                }
+            }
+
+            private void DrawEyeArea(Graphics g, RectangleF faceRect)
+            {
+                float darkW = faceRect.Width * 0.78f;
+                float darkH = faceRect.Height * 0.50f;
+                float darkX = faceRect.X + (faceRect.Width - darkW) / 2f;
+                float darkY = faceRect.Y + faceRect.Height * 0.23f;
+
+                RectangleF darkRect = new RectangleF(darkX, darkY, darkW, darkH);
+
+                using (GraphicsPath darkPath = RoundedRectF(darkRect, darkH / 2f))
+                using (SolidBrush darkBrush = new SolidBrush(DarkArea))
+                {
+                    g.FillPath(darkBrush, darkPath);
+                }
+
+                DrawEyes(g, darkRect);
+            }
+
+            private void DrawEyes(Graphics g, RectangleF darkRect)
+            {
+                float eyeW = darkRect.Width * 0.18f;
+                float eyeH = darkRect.Height * 0.46f;
+                float eyeY = darkRect.Y + (darkRect.Height - eyeH) / 2f;
+
+                RectangleF leftEye = new RectangleF(
+                    darkRect.X + darkRect.Width * 0.23f,
+                    eyeY,
+                    eyeW,
+                    eyeH);
+
+                RectangleF rightEye = new RectangleF(
+                    darkRect.Right - darkRect.Width * 0.23f - eyeW,
+                    eyeY,
+                    eyeW,
+                    eyeH);
+
+                using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(70, EyeGlow)))
+                using (SolidBrush eyeBrush = new SolidBrush(EyeGlow))
+                {
+                    g.FillEllipse(glowBrush, leftEye.X - 2, leftEye.Y - 2, leftEye.Width + 4, leftEye.Height + 4);
+                    g.FillEllipse(glowBrush, rightEye.X - 2, rightEye.Y - 2, rightEye.Width + 4, rightEye.Height + 4);
+
+                    g.FillEllipse(eyeBrush, leftEye);
+                    g.FillEllipse(eyeBrush, rightEye);
+                }
+            }
+
+            private void DrawMouth(Graphics g, RectangleF faceRect)
+            {
+                float mouthW = faceRect.Width * 0.18f;
+                float mouthY = faceRect.Y + faceRect.Height * 0.76f;
+                float mouthX1 = faceRect.X + (faceRect.Width - mouthW) / 2f;
+                float mouthX2 = mouthX1 + mouthW;
+
+                using (Pen mouthPen = new Pen(Mouth, 1.5f))
+                {
+                    mouthPen.StartCap = LineCap.Round;
+                    mouthPen.EndCap = LineCap.Round;
+                    g.DrawLine(mouthPen, mouthX1, mouthY, mouthX2, mouthY);
+                }
+            }
+
+            private void DrawOnlineDot(Graphics g)
+            {
+                Rectangle circleRect = GetCircleRect();
+
+                int outerSize = Math.Max(9, Width / 5);
+                int innerSize = outerSize - 4;
+
+                int outerX = circleRect.Right - outerSize + 2;
+                int outerY = circleRect.Bottom - outerSize + 2;
+
+                using (SolidBrush whiteBrush = new SolidBrush(Color.White))
+                using (SolidBrush greenBrush = new SolidBrush(Online))
+                {
+                    g.FillEllipse(whiteBrush, outerX, outerY, outerSize, outerSize);
+                    g.FillEllipse(greenBrush, outerX + 2, outerY + 2, innerSize, innerSize);
+                }
+            }
+
+            private static GraphicsPath RoundedRectF(RectangleF rect, float radius)
+            {
+                float d = radius * 2f;
+
+                if (d > rect.Width)
+                {
+                    d = rect.Width;
+                }
+
+                if (d > rect.Height)
+                {
+                    d = rect.Height;
+                }
+
+                GraphicsPath path = new GraphicsPath();
+
+                path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+                path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+                path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+                path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
+                path.CloseFigure();
+
+                return path;
+            }
+        }
+
     }
 }

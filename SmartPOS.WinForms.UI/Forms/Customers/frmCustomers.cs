@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -298,8 +298,9 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             pnlRight = new CardPanel
             {
                 BackColor = Surface,
-                Radius = 10,
-                BorderColor = Border
+                Radius = 12,
+                BorderColor = Border,
+                AutoScroll = true
             };
 
             lblAvatar = new Label
@@ -382,17 +383,17 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
                 BackColor = Surface
             };
 
-            btnRedeem = MakeButton("★  Đổi điểm", Surface, Primary, 104);
+            btnRedeem = MakeButton("★  Đổi", Surface, Primary, 86);
             btnRedeem.FlatAppearance.BorderColor = Border;
             btnRedeem.FlatAppearance.BorderSize = 1;
             btnRedeem.Click += (s, e) => ShowSelectedCustomerHistory();
 
-            btnCreateOffer = MakeButton("🎁  Tạo ưu đãi", Surface, Primary, 112);
+            btnCreateOffer = MakeButton("🎁  Tạo ưu đãi", Surface, Primary, 96);
             btnCreateOffer.FlatAppearance.BorderColor = Border;
             btnCreateOffer.FlatAppearance.BorderSize = 1;
             btnCreateOffer.Click += (s, e) => MessageBox.Show("Chức năng tạo ưu đãi sẽ dùng dữ liệu xu hướng của khách hàng đang chọn.", "Tạo ưu đãi");
 
-            btnViewHistory = MakeButton("☷  Xem lịch sử mua", Surface, Primary, 140);
+            btnViewHistory = MakeButton("☷  Xem lịch sử mua", Surface, Primary, 96);
             btnViewHistory.FlatAppearance.BorderColor = Border;
             btnViewHistory.FlatAppearance.BorderSize = 1;
             btnViewHistory.Click += (s, e) => ShowSelectedCustomerHistory();
@@ -439,9 +440,13 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             };
             panel.Paint += (s, e) =>
             {
-                using (var pen = new Pen(Border))
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using (GraphicsPath path = RoundedPath(new Rectangle(0, 0, panel.Width - 1, panel.Height - 1), 8))
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(250, 251, 254)))
+                using (Pen pen = new Pen(Border))
                 {
-                    e.Graphics.DrawRectangle(pen, 0, 0, panel.Width - 1, panel.Height - 1);
+                    e.Graphics.FillPath(brush, path);
+                    e.Graphics.DrawPath(pen, path);
                 }
             };
 
@@ -492,14 +497,16 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
         private void BuildGridColumns()
         {
             dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "RawMaKH", HeaderText = "RawMaKH", DataPropertyName = "RawMaKH", Visible = false });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "MaKH", HeaderText = "Mã KH", DataPropertyName = "MaKH", Width = 90 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "HoTen", HeaderText = "Họ tên", DataPropertyName = "HoTen", Width = 170 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "SoDienThoai", HeaderText = "SĐT", DataPropertyName = "SoDienThoai", Width = 110 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "HangThanhVien", HeaderText = "Hạng thành viên", DataPropertyName = "HangThanhVien", Width = 115 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "DiemHienCo", HeaderText = "Điểm tích lũy", DataPropertyName = "DiemHienCo", Width = 95 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "TongChiTieuText", HeaderText = "Tổng chi tiêu", DataPropertyName = "TongChiTieuText", Width = 120 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "TopProduct", HeaderText = "Mặt hàng mua nhiều nhất", DataPropertyName = "TopProduct", Width = 150 });
-            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "TrangThaiText", HeaderText = "Trạng thái", DataPropertyName = "TrangThaiText", Width = 100 });
+
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "MaKH", HeaderText = "Mã KH", DataPropertyName = "MaKH", Width = 110 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "HoTen", HeaderText = "Họ tên", DataPropertyName = "HoTen", Width = 210 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "SoDienThoai", HeaderText = "SĐT", DataPropertyName = "SoDienThoai", Width = 140 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "HangThanhVien", HeaderText = "Hạng thành viên", DataPropertyName = "HangThanhVien", Width = 145 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "DiemHienCo", HeaderText = "Điểm tích lũy", DataPropertyName = "DiemHienCo", Width = 120 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "TongChiTieuText", HeaderText = "Tổng chi tiêu", DataPropertyName = "TongChiTieuText", Width = 145 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "TopProduct", HeaderText = "Mặt hàng top", DataPropertyName = "TopProduct", Width = 300 });
+            dgvCustomers.Columns.Add(new DataGridViewTextBoxColumn { Name = "TrangThaiText", HeaderText = "Trạng thái", DataPropertyName = "TrangThaiText", Width = 130 });
+            dgvCustomers.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         }
 
         private void FrmCustomers_Load(object sender, EventArgs e)
@@ -930,22 +937,78 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
 
         private void UpdateResponsiveLayout()
         {
+            if (ClientSize.Width <= 0 || ClientSize.Height <= 0)
+            {
+                return;
+            }
+
             int pad = 20;
-            int rightWidth = Math.Min(390, Math.Max(330, ClientSize.Width / 3));
-            int rightLeft = ClientSize.Width - pad - rightWidth;
-            int leftWidth = Math.Max(520, rightLeft - pad - 12);
+            int gap = 14;
 
-            lblBanner.SetBounds(pad, 78, ClientSize.Width - (pad * 2), 42);
-            pnlKpis.SetBounds(pad, 136, leftWidth, 112);
-            pnlRight.SetBounds(rightLeft, 136, rightWidth, Math.Max(520, ClientSize.Height - 156));
-            pnlTable.SetBounds(pad, 265, leftWidth, Math.Max(300, ClientSize.Height - 285));
+            lblTitle.Location = new Point(pad, 18);
+            lblSubtitle.Location = new Point(pad + 2, 48);
 
-            int kpiGap = 12;
-            int kpiWidth = Math.Max(118, (pnlKpis.Width - (kpiGap * 3)) / 4);
+            lblBanner.SetBounds(
+                pad,
+                78,
+                Math.Max(300, ClientSize.Width - pad * 2),
+                42);
+
+            int contentTop = 136;
+            int contentHeight = Math.Max(420, ClientSize.Height - contentTop - 20);
+
+            bool showRightPanel = ClientSize.Width >= 1100;
+
+            int rightWidth = showRightPanel
+                ? Math.Min(390, Math.Max(340, ClientSize.Width / 3))
+                : 0;
+
+            int leftWidth = showRightPanel
+                ? ClientSize.Width - pad * 2 - gap - rightWidth
+                : ClientSize.Width - pad * 2;
+
+            leftWidth = Math.Max(620, leftWidth);
+
+            pnlKpis.SetBounds(pad, contentTop, leftWidth, 112);
+
+            int tableTop = contentTop + 130;
+            pnlTable.SetBounds(
+                pad,
+                tableTop,
+                leftWidth,
+                Math.Max(300, ClientSize.Height - tableTop - 20));
+
+            pnlRight.Visible = showRightPanel;
+
+            if (showRightPanel)
+            {
+                pnlRight.SetBounds(
+                    pnlTable.Right + gap,
+                    contentTop,
+                    rightWidth,
+                    contentHeight);
+            }
+
+            LayoutKpiCards();
+            LayoutTablePanel();
+            LayoutRightPanel();
+        }
+        private void LayoutKpiCards()
+        {
+            if (pnlKpis == null)
+            {
+                return;
+            }
+
+            int gap = 12;
+            int count = Math.Max(1, pnlKpis.Controls.Count);
+            int cardWidth = Math.Max(145, (pnlKpis.Width - gap * (count - 1)) / count);
+
             for (int i = 0; i < pnlKpis.Controls.Count; i++)
             {
                 Control card = pnlKpis.Controls[i];
-                card.SetBounds(i * (kpiWidth + kpiGap), 0, kpiWidth, 112);
+                card.SetBounds(i * (cardWidth + gap), 0, cardWidth, 112);
+
                 foreach (Control child in card.Controls)
                 {
                     if (child.Anchor.HasFlag(AnchorStyles.Right))
@@ -954,34 +1017,156 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
                     }
                 }
             }
-
-            int tableWidth = pnlTable.Width;
-            int actionX = tableWidth - 16;
-            btnHistory.Location = new Point(actionX - btnHistory.Width, 56);
-            actionX = btnHistory.Left - 10;
-            btnEdit.Location = new Point(actionX - btnEdit.Width, 56);
-            actionX = btnEdit.Left - 10;
-            btnAdd.Location = new Point(actionX - btnAdd.Width, 56);
-            actionX = btnAdd.Left - 10;
-            btnExport.Location = new Point(actionX - btnExport.Width, 56);
-            actionX = btnExport.Left - 10;
-            btnReload.Location = new Point(actionX - btnReload.Width, 56);
-            actionX = btnReload.Left - 10;
-            btnSearch.Location = new Point(actionX - btnSearch.Width, 56);
-
-            int availableFilterWidth = btnSearch.Left - 16 - 14;
-            int keywordWidth = Math.Max(180, Math.Min(280, availableFilterWidth - 145));
-            txtKeyword.SetBounds(16, 58, keywordWidth, 28);
-            cboRank.SetBounds(txtKeyword.Right + 12, 58, 130, 28);
-            dgvCustomers.SetBounds(0, 104, tableWidth, Math.Max(160, pnlTable.Height - 142));
-            lblShowing.Location = new Point(16, pnlTable.Height - 30);
-
-            int rightBottom = pnlRight.Height - 48;
-            btnRedeem.Location = new Point(18, rightBottom);
-            btnCreateOffer.Location = new Point(btnRedeem.Right + 12, rightBottom);
-            btnViewHistory.Location = new Point(btnCreateOffer.Right + 12, rightBottom);
         }
 
+        private void LayoutTablePanel()
+        {
+            if (pnlTable == null)
+            {
+                return;
+            }
+
+            int width = pnlTable.Width;
+            int padding = 16;
+            int toolbarY = 58;
+
+            // Action buttons từ phải sang trái
+            int x = width - padding;
+
+            btnHistory.Location = new Point(x - btnHistory.Width, 56);
+            x = btnHistory.Left - 10;
+
+            btnEdit.Location = new Point(x - btnEdit.Width, 56);
+            x = btnEdit.Left - 10;
+
+            btnAdd.Location = new Point(x - btnAdd.Width, 56);
+            x = btnAdd.Left - 10;
+
+            btnExport.Location = new Point(x - btnExport.Width, 56);
+            x = btnExport.Left - 10;
+
+            btnReload.Location = new Point(x - btnReload.Width, 56);
+            x = btnReload.Left - 10;
+
+            btnSearch.Location = new Point(x - btnSearch.Width, 56);
+
+            // Filter bên trái
+            int filterRight = btnSearch.Left - 12;
+            int rankWidth = 130;
+            int keywordWidth = Math.Max(180, filterRight - padding - rankWidth - 12);
+
+            // Nếu không đủ chỗ, ẩn bớt nút phụ
+            bool compact = keywordWidth < 170 || width < 760;
+
+            btnExport.Visible = !compact;
+            btnEdit.Visible = true;
+            btnHistory.Visible = true;
+
+            if (compact)
+            {
+                x = width - padding;
+
+                btnAdd.Location = new Point(x - btnAdd.Width, 56);
+                x = btnAdd.Left - 10;
+
+                btnReload.Location = new Point(x - btnReload.Width, 56);
+                x = btnReload.Left - 10;
+
+                btnSearch.Location = new Point(x - btnSearch.Width, 56);
+
+                filterRight = btnSearch.Left - 12;
+                keywordWidth = Math.Max(180, filterRight - padding - rankWidth - 12);
+            }
+
+            txtKeyword.SetBounds(padding, toolbarY, keywordWidth, 28);
+            cboRank.SetBounds(txtKeyword.Right + 12, toolbarY, rankWidth, 28);
+
+            dgvCustomers.SetBounds(
+                0,
+                104,
+                width,
+                Math.Max(160, pnlTable.Height - 142));
+
+            lblShowing.Location = new Point(padding, pnlTable.Height - 30);
+        }
+
+        private void LayoutRightPanel()
+        {
+            if (pnlRight == null || !pnlRight.Visible)
+            {
+                return;
+            }
+
+            int w = pnlRight.ClientSize.Width;
+            int pad = 18;
+
+            lblAvatar.SetBounds(pad, 20, 54, 54);
+
+            int detailX = 88;
+            int detailW = Math.Max(150, w - detailX - pad);
+
+            lblDetailName.SetBounds(detailX, 22, detailW - 84, 24);
+            lblDetailRank.SetBounds(w - pad - 78, 22, 78, 22);
+
+            lblDetailPhone.SetBounds(detailX, 52, detailW, 22);
+            lblDetailAddress.SetBounds(detailX, 78, detailW, 22);
+            lblDetailJoinDate.SetBounds(detailX, 104, detailW, 22);
+
+            // 4 metric nhỏ chia đều theo chiều rộng panel
+            int metricGap = 8;
+            int metricY = 150;
+            int metricW = Math.Max(68, (w - pad * 2 - metricGap * 3) / 4);
+
+            LayoutMetricLabel(lblDetailSpend, pad + 0 * (metricW + metricGap), metricY, metricW);
+            LayoutMetricLabel(lblDetailPoints, pad + 1 * (metricW + metricGap), metricY, metricW);
+            LayoutMetricLabel(lblDetailRedeemValue, pad + 2 * (metricW + metricGap), metricY, metricW);
+            LayoutMetricLabel(lblDetailPurchaseCount, pad + 3 * (metricW + metricGap), metricY, metricW);
+
+            pnlCategoryChart.SetBounds(pad, 270, 105, 105);
+            flpCategoryLegend.SetBounds(135, 268, Math.Max(160, w - 150), 110);
+
+            flpTopProducts.SetBounds(pad, 426, w - pad * 2, 102);
+            flpInsights.SetBounds(pad, 578, w - pad * 2, 130);
+
+            foreach (Control c in flpTopProducts.Controls)
+            {
+                c.Width = flpTopProducts.Width - 4;
+            }
+
+            foreach (Control c in flpInsights.Controls)
+            {
+                c.Width = flpInsights.Width - 4;
+            }
+
+            // Nút dưới cùng
+            int buttonY = Math.Max(730, pnlRight.ClientSize.Height - 46);
+            int buttonGap = 8;
+            int buttonW = Math.Max(82, (w - pad * 2 - buttonGap * 2) / 3);
+
+            btnRedeem.SetBounds(pad, buttonY, buttonW, 32);
+            btnCreateOffer.SetBounds(btnRedeem.Right + buttonGap, buttonY, buttonW, 32);
+            btnViewHistory.SetBounds(btnCreateOffer.Right + buttonGap, buttonY, buttonW, 32);
+        }
+        private void LayoutMetricLabel(Label valueLabel, int x, int y, int width)
+        {
+            if (valueLabel == null || valueLabel.Parent == null)
+            {
+                return;
+            }
+
+            Panel panel = valueLabel.Parent as Panel;
+            if (panel == null)
+            {
+                return;
+            }
+
+            panel.SetBounds(x, y, width, 58);
+
+            foreach (Control child in panel.Controls)
+            {
+                child.Width = width;
+            }
+        }
         private static void ApplyRoundedRegion(Control ctrl, int radius)
         {
             using (var path = new GraphicsPath())
