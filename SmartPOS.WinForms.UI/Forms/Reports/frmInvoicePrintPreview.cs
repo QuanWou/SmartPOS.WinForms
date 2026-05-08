@@ -161,6 +161,22 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
             builder.AppendLine("Ngày lập   : " + first.NgayLap.ToString("dd/MM/yyyy HH:mm"));
             builder.AppendLine("Nhân viên  : " + first.TenNhanVien);
             builder.AppendLine("Trạng thái : " + first.TrangThai);
+            builder.AppendLine("Khách hàng : " + GetDisplayText(first.TenKhachHang, "Khách lẻ"));
+            if (!string.IsNullOrWhiteSpace(first.SoDienThoaiKhachHang))
+            {
+                builder.AppendLine("SĐT        : " + first.SoDienThoaiKhachHang);
+            }
+
+            if (!string.IsNullOrWhiteSpace(first.HangThanhVienKhachHang))
+            {
+                builder.AppendLine("Hạng       : " + first.HangThanhVienKhachHang);
+            }
+
+            if (!string.IsNullOrWhiteSpace(first.DiaChiKhachHang))
+            {
+                builder.AppendLine("Địa chỉ    : " + first.DiaChiKhachHang);
+            }
+
             builder.AppendLine("Ghi chú    : " + (string.IsNullOrWhiteSpace(first.GhiChu) ? "" : first.GhiChu));
             builder.AppendLine("--------------------------------------------------");
             builder.AppendLine(string.Format("{0,-6}{1,-24}{2,6}{3,12}", "Mã", "Sản phẩm", "SL", "T.tiền"));
@@ -196,6 +212,11 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
             txtPreview.Text = builder.ToString();
             txtPreview.SelectionStart = 0;
             txtPreview.SelectionLength = 0;
+        }
+
+        private string GetDisplayText(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : value;
         }
 
         private void InitializePrintDocument()
