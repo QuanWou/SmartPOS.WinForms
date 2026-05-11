@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using SmartPOS.WinForms.DTO.Responses;
 
 namespace SmartPOS.WinForms.DAL.Interfaces
@@ -14,6 +14,7 @@ namespace SmartPOS.WinForms.DAL.Interfaces
         IEnumerable<ChatBotProductInsightResponse> GetTopSellingProducts(int days, int take);
 
         IEnumerable<ChatBotInvoiceSummaryResponse> GetLatestInvoices(int take);
+        
 
         IEnumerable<ChatBotCategoryComparisonResponse> GetRevenueComparisonByCategory(int days);
 

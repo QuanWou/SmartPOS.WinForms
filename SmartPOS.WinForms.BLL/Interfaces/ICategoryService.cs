@@ -13,5 +13,7 @@ namespace SmartPOS.WinForms.BLL.Interfaces
         OperationResult Insert(CategoryDTO category);
 
         OperationResult Update(CategoryDTO category);
+
+        OperationResult Delete(int maLoai);
     }
 }

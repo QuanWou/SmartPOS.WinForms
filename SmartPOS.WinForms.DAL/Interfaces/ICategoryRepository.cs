@@ -14,5 +14,11 @@ namespace SmartPOS.WinForms.DAL.Interfaces
         int Insert(CategoryDTO category);
 
         int Update(CategoryDTO category);
+
+        bool HasProducts(int maLoai);
+
+        int UpdateStatus(int maLoai, bool trangThai);
+
+        int Delete(int maLoai);
     }
 }

@@ -1028,66 +1028,92 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
 
             int width = pnlTable.Width;
             int padding = 16;
+            int gap = 10;
             int toolbarY = 58;
+            int buttonHeight = 32;
+            int contentWidth = Math.Max(320, width - padding * 2);
+            int rankWidth = width < 820 ? 118 : 130;
+            int filterGap = 12;
+            int searchGap = 10;
+            int minKeywordWidth = 180;
 
-            // Action buttons từ phải sang trái
-            int x = width - padding;
+            btnSearch.SetBounds(btnSearch.Left, btnSearch.Top, 88, buttonHeight);
+            btnReload.SetBounds(btnReload.Left, btnReload.Top, 78, buttonHeight);
+            btnExport.SetBounds(btnExport.Left, btnExport.Top, 104, buttonHeight);
+            btnAdd.SetBounds(btnAdd.Left, btnAdd.Top, 126, buttonHeight);
+            btnEdit.SetBounds(btnEdit.Left, btnEdit.Top, 70, buttonHeight);
+            btnHistory.SetBounds(btnHistory.Left, btnHistory.Top, 78, buttonHeight);
 
-            btnHistory.Location = new Point(x - btnHistory.Width, 56);
-            x = btnHistory.Left - 10;
-
-            btnEdit.Location = new Point(x - btnEdit.Width, 56);
-            x = btnEdit.Left - 10;
-
-            btnAdd.Location = new Point(x - btnAdd.Width, 56);
-            x = btnAdd.Left - 10;
-
-            btnExport.Location = new Point(x - btnExport.Width, 56);
-            x = btnExport.Left - 10;
-
-            btnReload.Location = new Point(x - btnReload.Width, 56);
-            x = btnReload.Left - 10;
-
-            btnSearch.Location = new Point(x - btnSearch.Width, 56);
-
-            // Filter bên trái
-            int filterRight = btnSearch.Left - 12;
-            int rankWidth = 130;
-            int keywordWidth = Math.Max(180, filterRight - padding - rankWidth - 12);
-
-            // Nếu không đủ chỗ, ẩn bớt nút phụ
-            bool compact = keywordWidth < 170 || width < 760;
-
-            btnExport.Visible = !compact;
-            btnEdit.Visible = true;
-            btnHistory.Visible = true;
-
-            if (compact)
+            Button[] actionButtons = { btnReload, btnExport, btnAdd, btnEdit, btnHistory };
+            foreach (Button button in actionButtons.Concat(new[] { btnSearch }))
             {
-                x = width - padding;
-
-                btnAdd.Location = new Point(x - btnAdd.Width, 56);
-                x = btnAdd.Left - 10;
-
-                btnReload.Location = new Point(x - btnReload.Width, 56);
-                x = btnReload.Left - 10;
-
-                btnSearch.Location = new Point(x - btnSearch.Width, 56);
-
-                filterRight = btnSearch.Left - 12;
-                keywordWidth = Math.Max(180, filterRight - padding - rankWidth - 12);
+                button.Visible = true;
             }
 
-            txtKeyword.SetBounds(padding, toolbarY, keywordWidth, 28);
-            cboRank.SetBounds(txtKeyword.Right + 12, toolbarY, rankWidth, 28);
+            int actionWidth = GetButtonGroupWidth(actionButtons, gap);
+            int availableForFilters = contentWidth - actionWidth - 18;
+            int keywordWidth = availableForFilters - rankWidth - filterGap - btnSearch.Width - searchGap;
+            bool singleRowToolbar = keywordWidth >= minKeywordWidth;
 
-            dgvCustomers.SetBounds(
-                0,
-                104,
-                width,
-                Math.Max(160, pnlTable.Height - 142));
+            if (singleRowToolbar)
+            {
+                keywordWidth = Math.Min(Math.Max(minKeywordWidth, keywordWidth), 360);
+
+                LayoutFilterControls(padding, toolbarY, keywordWidth, rankWidth, filterGap, searchGap);
+                PlaceButtonsFromRight(actionButtons, width - padding, toolbarY, gap);
+                LayoutCustomerGrid(104);
+            }
+            else
+            {
+                keywordWidth = Math.Max(
+                    minKeywordWidth,
+                    contentWidth - rankWidth - filterGap - btnSearch.Width - searchGap);
+
+                LayoutFilterControls(padding, toolbarY, keywordWidth, rankWidth, filterGap, searchGap);
+
+                int actionsY = toolbarY + buttonHeight + 10;
+                PlaceButtonsFromRight(actionButtons, width - padding, actionsY, gap);
+                LayoutCustomerGrid(actionsY + buttonHeight + 16);
+            }
 
             lblShowing.Location = new Point(padding, pnlTable.Height - 30);
+        }
+
+        private void LayoutFilterControls(int x, int y, int keywordWidth, int rankWidth, int filterGap, int searchGap)
+        {
+            txtKeyword.SetBounds(x, y, keywordWidth, 28);
+            cboRank.SetBounds(txtKeyword.Right + filterGap, y, rankWidth, 28);
+            btnSearch.SetBounds(cboRank.Right + searchGap, y - 2, btnSearch.Width, btnSearch.Height);
+        }
+
+        private int GetButtonGroupWidth(Button[] buttons, int gap)
+        {
+            if (buttons == null || buttons.Length == 0)
+            {
+                return 0;
+            }
+
+            return buttons.Sum(button => button.Width) + gap * (buttons.Length - 1);
+        }
+
+        private void PlaceButtonsFromRight(Button[] buttons, int right, int y, int gap)
+        {
+            int x = right;
+            for (int i = buttons.Length - 1; i >= 0; i--)
+            {
+                Button button = buttons[i];
+                button.SetBounds(x - button.Width, y - 2, button.Width, button.Height);
+                x = button.Left - gap;
+            }
+        }
+
+        private void LayoutCustomerGrid(int top)
+        {
+            dgvCustomers.SetBounds(
+                0,
+                top,
+                pnlTable.Width,
+                Math.Max(160, pnlTable.Height - top - 38));
         }
 
         private void LayoutRightPanel()

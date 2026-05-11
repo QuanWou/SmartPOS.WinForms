@@ -27,6 +27,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
 
         private Button btnAdd;
         private Button btnUpdate;
+        private Button btnDelete;
         private Button btnClear;
 
         private DataGridView dgvCategories;
@@ -122,10 +123,22 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             btnUpdate.FlatAppearance.BorderSize = 0;
             btnUpdate.Click += BtnUpdate_Click;
 
+            btnDelete = new Button
+            {
+                Text = "Xóa",
+                Location = new Point(220, 135),
+                Size = new Size(85, 34),
+                BackColor = Color.FromArgb(220, 80, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnDelete.FlatAppearance.BorderSize = 0;
+            btnDelete.Click += BtnDelete_Click;
+
             btnClear = new Button
             {
                 Text = "Làm mới",
-                Location = new Point(220, 135),
+                Location = new Point(315, 135),
                 Size = new Size(90, 34),
                 BackColor = Color.FromArgb(230, 233, 240),
                 ForeColor = Color.Black,
@@ -162,6 +175,7 @@ namespace SmartPOS.WinForms.UI.Forms.Products
             this.Controls.Add(chkTrangThai);
             this.Controls.Add(btnAdd);
             this.Controls.Add(btnUpdate);
+            this.Controls.Add(btnDelete);
             this.Controls.Add(btnClear);
             this.Controls.Add(dgvCategories);
 
@@ -300,6 +314,53 @@ namespace SmartPOS.WinForms.UI.Forms.Products
         private void BtnClear_Click(object sender, EventArgs e)
         {
             ResetForm();
+        }
+
+        private void BtnDelete_Click(object sender, EventArgs e)
+        {
+            if (_selectedCategoryId <= 0)
+            {
+                MessageBox.Show("Vui lòng chọn danh mục cần xóa.", "Thông báo");
+                return;
+            }
+
+            CategoryDTO category = _categoryService.GetById(_selectedCategoryId);
+            if (category == null)
+            {
+                MessageBox.Show("Không tìm thấy danh mục.", "Thông báo");
+                return;
+            }
+
+            bool isActiveCategory = category.TrangThai;
+            string message = isActiveCategory
+                ? string.Format("Bạn có chắc muốn chuyển danh mục \"{0}\" sang Ngừng hoạt động?", category.TenLoai)
+                : string.Format("Bạn có chắc muốn xóa vĩnh viễn danh mục \"{0}\"?", category.TenLoai);
+
+            DialogResult confirm = MessageBox.Show(
+                message,
+                isActiveCategory ? "Xác nhận ngừng hoạt động" : "Xác nhận xóa",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes)
+            {
+                return;
+            }
+
+            OperationResult result = _categoryService.Delete(_selectedCategoryId);
+
+            if (result.IsSuccess)
+            {
+                LoadCategories();
+                ResetForm();
+                return;
+            }
+
+            MessageBox.Show(
+                result.Message,
+                "Thông báo",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
 
         private void DgvCategories_SelectionChanged(object sender, EventArgs e)

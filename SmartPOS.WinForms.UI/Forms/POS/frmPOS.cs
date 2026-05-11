@@ -1,4 +1,4 @@
-using SmartPOS.WinForms.BLL.Interfaces;
+﻿using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Session;
 using SmartPOS.WinForms.DTO.Entities;
@@ -32,6 +32,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private static readonly Color SoftDanger = Color.FromArgb(245, 247, 252);
         private static readonly Color SoftDangerText = Color.FromArgb(190, 96, 96);
         private readonly IProductService _productService;
+        private readonly ICategoryService _categoryService;
         private readonly IInvoiceService _invoiceService;
         private readonly ICustomerService _customerService;
         private static readonly Color CartCardColor = Color.White;
@@ -40,6 +41,10 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private static readonly Color QtyCenterBg = Color.White;
         private static readonly Color DeleteBg = Color.FromArgb(252, 243, 243);
         private static readonly Color DeleteText = Color.FromArgb(220, 98, 98);
+        private const int ProductCardWidth = 168;
+        private const int ProductCardHeight = 118;
+        private const int ProductCardMargin = 6;
+        private const int ProductSectionHeaderHeight = 40;
         private Panel pnlLeft;
         private Panel pnlRight;
         private Panel pnlTop;
@@ -78,14 +83,21 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private Label lblTongTienValue;
 
         private List<ProductDTO> _products;
+        private List<CategoryDTO> _categories;
+        private Dictionary<int, string> _categoryNameById;
+        private Dictionary<int, int> _categoryOrderById;
         private List<CartItem> _cartItems;
         private CustomerDTO _selectedCustomer;
 
         public frmPOS()
         {
             _productService = new ProductService();
+            _categoryService = new CategoryService();
             _invoiceService = new InvoiceService();
             _customerService = new CustomerService();
+            _categories = new List<CategoryDTO>();
+            _categoryNameById = new Dictionary<int, string>();
+            _categoryOrderById = new Dictionary<int, int>();
             _cartItems = new List<CartItem>();
 
             InitializeComponent();
@@ -274,10 +286,12 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
-                WrapContents = true,
-                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                FlowDirection = FlowDirection.TopDown,
+                Padding = new Padding(0, 0, 6, 0),
                 BackColor = SurfaceColor
             };
+            flpProducts.SizeChanged += (s, e) => ResizeProductSections();
 
             pnlProducts.Controls.Add(flpProducts);
 
@@ -509,6 +523,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
         private void LoadProducts()
         {
+            LoadCategories();
+
             _products = _productService.GetAll()
                 .Where(x => x.TrangThai && !IsExpiredProduct(x))
                 .ToList();
@@ -516,22 +532,222 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             RenderProducts(_products);
         }
 
+        private void LoadCategories()
+        {
+            _categories = _categoryService.GetAll()
+                .OrderBy(x => x.TenLoai)
+                .ToList();
+
+            _categoryNameById = _categories
+                .GroupBy(x => x.MaLoai)
+                .ToDictionary(x => x.Key, x => x.First().TenLoai);
+
+            _categoryOrderById = _categories
+                .Select((category, index) => new { category.MaLoai, Index = index })
+                .GroupBy(x => x.MaLoai)
+                .ToDictionary(x => x.Key, x => x.First().Index);
+        }
+
         private void RenderProducts(List<ProductDTO> products)
         {
+            List<ProductDTO> visibleProducts = products ?? new List<ProductDTO>();
+
+            flpProducts.SuspendLayout();
             flpProducts.Controls.Clear();
+
+            if (visibleProducts.Count == 0)
+            {
+                flpProducts.Controls.Add(BuildEmptyProductsView());
+                flpProducts.ResumeLayout();
+                return;
+            }
+
+            var groups = visibleProducts
+                .GroupBy(x => x.MaLoai)
+                .OrderBy(x => GetCategorySortIndex(x.Key))
+                .ThenBy(x => GetCategoryName(x.Key));
+
+            foreach (var group in groups)
+            {
+                flpProducts.Controls.Add(BuildCategorySection(group.Key, group.ToList()));
+            }
+
+            ResizeProductSections();
+            flpProducts.ResumeLayout();
+        }
+
+        private Control BuildEmptyProductsView()
+        {
+            Panel panel = new Panel
+            {
+                Width = GetProductSectionWidth(),
+                Height = 96,
+                Margin = new Padding(0, 0, 0, 12),
+                BackColor = SurfaceColor,
+                Tag = "empty-products"
+            };
+
+            Label lblEmpty = new Label
+            {
+                Text = "Không tìm thấy sản phẩm phù hợp.",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+                ForeColor = TextSoft,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill
+            };
+
+            panel.Controls.Add(lblEmpty);
+            return panel;
+        }
+
+        private Control BuildCategorySection(int maLoai, List<ProductDTO> products)
+        {
+            int sectionWidth = GetProductSectionWidth();
+            Panel section = new Panel
+            {
+                Width = sectionWidth,
+                Height = CalculateCategorySectionHeight(sectionWidth, products.Count),
+                Margin = new Padding(0, 0, 0, 14),
+                BackColor = SurfaceColor
+            };
+            section.Paint += CategorySection_Paint;
+
+            Label lblCategory = new Label
+            {
+                Text = GetCategoryName(maLoai),
+                Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
+                ForeColor = PrimaryDark,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Location = new Point(10, 4),
+                Size = new Size(Math.Max(120, sectionWidth - 130), 28)
+            };
+
+            Label lblCount = new Label
+            {
+                Text = products.Count + " mặt hàng",
+                Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+                ForeColor = PrimaryMid,
+                BackColor = FieldColor,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(92, 24),
+                Location = new Point(Math.Max(10, sectionWidth - 102), 6)
+            };
+
+            FlowLayoutPanel productFlow = new FlowLayoutPanel
+            {
+                Location = new Point(0, ProductSectionHeaderHeight),
+                Size = new Size(sectionWidth, Math.Max(0, section.Height - ProductSectionHeaderHeight)),
+                BackColor = SurfaceColor,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                AutoScroll = false
+            };
 
             foreach (ProductDTO product in products)
             {
-                flpProducts.Controls.Add(BuildProductCard(product));
+                productFlow.Controls.Add(BuildProductCard(product));
             }
+
+            section.Tag = new ProductCategorySectionLayout
+            {
+                ProductCount = products.Count,
+                ProductFlow = productFlow,
+                TitleLabel = lblCategory,
+                CountLabel = lblCount
+            };
+
+            section.Controls.Add(lblCategory);
+            section.Controls.Add(lblCount);
+            section.Controls.Add(productFlow);
+
+            return section;
+        }
+
+        private int GetProductSectionWidth()
+        {
+            int width = flpProducts != null ? flpProducts.ClientSize.Width : 0;
+
+            if (width <= 0 && pnlProducts != null)
+            {
+                width = pnlProducts.ClientSize.Width - pnlProducts.Padding.Horizontal;
+            }
+
+            return Math.Max(320, width - 10);
+        }
+
+        private int CalculateCategorySectionHeight(int sectionWidth, int productCount)
+        {
+            int cardOuterWidth = ProductCardWidth + ProductCardMargin * 2;
+            int cardOuterHeight = ProductCardHeight + ProductCardMargin * 2 + 2;
+            int columns = Math.Max(1, sectionWidth / Math.Max(1, cardOuterWidth));
+            int rows = Math.Max(1, (int)Math.Ceiling(productCount / (double)columns));
+
+            return ProductSectionHeaderHeight + rows * cardOuterHeight + 4;
+        }
+
+        private void ResizeProductSections()
+        {
+            if (flpProducts == null || flpProducts.Controls.Count == 0)
+            {
+                return;
+            }
+
+            int sectionWidth = GetProductSectionWidth();
+
+            foreach (Control control in flpProducts.Controls)
+            {
+                if (control.Tag is ProductCategorySectionLayout layout)
+                {
+                    int sectionHeight = CalculateCategorySectionHeight(sectionWidth, layout.ProductCount);
+                    control.SetBounds(control.Left, control.Top, sectionWidth, sectionHeight);
+
+                    layout.CountLabel.Location = new Point(Math.Max(10, sectionWidth - layout.CountLabel.Width - 10), 6);
+                    layout.TitleLabel.Width = Math.Max(120, layout.CountLabel.Left - layout.TitleLabel.Left - 12);
+                    layout.ProductFlow.SetBounds(
+                        0,
+                        ProductSectionHeaderHeight,
+                        sectionWidth,
+                        Math.Max(0, sectionHeight - ProductSectionHeaderHeight));
+                }
+                else if (object.Equals(control.Tag, "empty-products"))
+                {
+                    control.Width = sectionWidth;
+                }
+            }
+        }
+
+        private string GetCategoryName(int maLoai)
+        {
+            string categoryName;
+            if (_categoryNameById != null
+                && _categoryNameById.TryGetValue(maLoai, out categoryName)
+                && !string.IsNullOrWhiteSpace(categoryName))
+            {
+                return categoryName;
+            }
+
+            return "Chưa phân loại";
+        }
+
+        private int GetCategorySortIndex(int maLoai)
+        {
+            int sortIndex;
+            if (_categoryOrderById != null && _categoryOrderById.TryGetValue(maLoai, out sortIndex))
+            {
+                return sortIndex;
+            }
+
+            return int.MaxValue;
         }
 
         private Control BuildProductCard(ProductDTO product)
         {
             Panel card = new Panel
             {
-                Size = new Size(165, 130),
-                Margin = new Padding(8),
+                Size = new Size(ProductCardWidth, ProductCardHeight),
+                Margin = new Padding(ProductCardMargin, ProductCardMargin, ProductCardMargin, ProductCardMargin + 2),
                 BackColor = CardTint,
                 BorderStyle = BorderStyle.None,
                 Cursor = Cursors.Hand
@@ -544,8 +760,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
                 ForeColor = PrimaryDark,
                 AutoSize = false,
-                Size = new Size(135, 36),
-                Location = new Point(12, 14)
+                Size = new Size(ProductCardWidth - 24, 34),
+                Location = new Point(12, 12)
             };
 
             Label lblMa = new Label
@@ -554,7 +770,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 58)
+                Location = new Point(12, 52)
             };
 
             Label lblGia = new Label
@@ -563,14 +779,14 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
                 ForeColor = PrimaryMid,
                 AutoSize = true,
-                Location = new Point(12, 84)
+                Location = new Point(12, 78)
             };
 
             Button btnThem = new Button
             {
                 Text = "Th\u00eam",
                 Size = new Size(56, 26),
-                Location = new Point(95, 80),
+                Location = new Point(ProductCardWidth - 68, 76),
                 BackColor = PrimaryDark,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
@@ -1039,7 +1255,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             List<ProductDTO> filtered = _products.Where(x =>
                 (!string.IsNullOrWhiteSpace(x.TenSP) && x.TenSP.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                (!string.IsNullOrWhiteSpace(x.MaVach) && x.MaVach.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0))
+                (!string.IsNullOrWhiteSpace(x.MaVach) && x.MaVach.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                GetCategoryName(x.MaLoai).IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToList();
 
             RenderProducts(filtered);
@@ -1289,6 +1506,32 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
             }
+        }
+
+        private void CategorySection_Paint(object sender, PaintEventArgs e)
+        {
+            Panel section = sender as Panel;
+            if (section == null)
+            {
+                return;
+            }
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using (Pen linePen = new Pen(BorderColor))
+            using (Pen accentPen = new Pen(PrimaryMid, 3))
+            {
+                e.Graphics.DrawLine(linePen, 10, ProductSectionHeaderHeight - 6, section.Width - 10, ProductSectionHeaderHeight - 6);
+                e.Graphics.DrawLine(accentPen, 10, ProductSectionHeaderHeight - 6, 54, ProductSectionHeaderHeight - 6);
+            }
+        }
+
+        private class ProductCategorySectionLayout
+        {
+            public int ProductCount { get; set; }
+            public FlowLayoutPanel ProductFlow { get; set; }
+            public Label TitleLabel { get; set; }
+            public Label CountLabel { get; set; }
         }
 
         private class CartItem

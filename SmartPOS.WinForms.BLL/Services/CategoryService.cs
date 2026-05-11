@@ -114,6 +114,67 @@ namespace SmartPOS.WinForms.BLL.Services
             }
         }
 
+        public OperationResult Delete(int maLoai)
+        {
+            if (!ValidationHelper.IsPositiveInt(maLoai))
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = MessageConstants.InvalidInput
+                };
+            }
+
+            try
+            {
+                CategoryDTO category = _categoryRepository.GetById(maLoai);
+                if (category == null)
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = MessageConstants.NoDataFound
+                    };
+                }
+
+                if (category.TrangThai)
+                {
+                    int inactiveRowsAffected = _categoryRepository.UpdateStatus(maLoai, false);
+
+                    return new OperationResult
+                    {
+                        IsSuccess = inactiveRowsAffected > 0,
+                        Message = inactiveRowsAffected > 0 ? MessageConstants.UpdateSuccess : MessageConstants.UpdateFailed
+                    };
+                }
+
+                if (_categoryRepository.HasProducts(maLoai))
+                {
+                    return new OperationResult
+                    {
+                        IsSuccess = false,
+                        Message = "Danh mục đang có sản phẩm, không thể xóa vĩnh viễn. Vui lòng chuyển hoặc xóa sản phẩm trước."
+                    };
+                }
+
+                int rowsAffected = _categoryRepository.Delete(maLoai);
+
+                return new OperationResult
+                {
+                    IsSuccess = rowsAffected > 0,
+                    Message = rowsAffected > 0 ? MessageConstants.DeleteSuccess : MessageConstants.DeleteFailed
+                };
+            }
+            catch (Exception ex)
+            {
+                return new OperationResult
+                {
+                    IsSuccess = false,
+                    Message = MessageConstants.DeleteFailed + " " + ex.Message
+                };
+            }
+        }
+
         private OperationResult ValidateCategory(CategoryDTO category, bool isUpdate)
         {
             if (category == null)

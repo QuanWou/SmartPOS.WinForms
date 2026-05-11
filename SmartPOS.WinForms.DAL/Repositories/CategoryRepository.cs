@@ -85,5 +85,38 @@ namespace SmartPOS.WinForms.DAL.Repositories
 
             return _dbHelper.Execute(sql, category);
         }
+
+        public bool HasProducts(int maLoai)
+        {
+            string sql = @"
+                SELECT CAST(
+                    CASE
+                        WHEN EXISTS (SELECT 1 FROM Products WHERE MaLoai = @MaLoai)
+                            THEN 1
+                        ELSE 0
+                    END AS BIT)";
+
+            return _dbHelper.QueryFirstOrDefault<bool>(sql, new { MaLoai = maLoai });
+        }
+
+        public int UpdateStatus(int maLoai, bool trangThai)
+        {
+            string sql = @"
+                UPDATE Categories
+                SET TrangThai = @TrangThai
+                WHERE MaLoai = @MaLoai";
+
+            return _dbHelper.Execute(sql, new
+            {
+                MaLoai = maLoai,
+                TrangThai = trangThai
+            });
+        }
+
+        public int Delete(int maLoai)
+        {
+            string sql = "DELETE FROM Categories WHERE MaLoai = @MaLoai";
+            return _dbHelper.Execute(sql, new { MaLoai = maLoai });
+        }
     }
 }
