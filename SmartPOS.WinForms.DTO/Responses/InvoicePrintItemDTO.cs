@@ -10,6 +10,14 @@ namespace SmartPOS.WinForms.DTO.Responses
 
         public string TenNhanVien { get; set; }
 
+        public string TenKhachHang { get; set; }
+
+        public string SoDienThoaiKhachHang { get; set; }
+
+        public string DiaChiKhachHang { get; set; }
+
+        public string HangThanhVienKhachHang { get; set; }
+
         public string GhiChu { get; set; }
 
         public string TrangThai { get; set; }

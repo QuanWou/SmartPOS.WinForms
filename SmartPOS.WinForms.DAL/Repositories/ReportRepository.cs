@@ -21,6 +21,10 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     i.MaHD,
                     i.NgayLap,
                     u.TenNV AS TenNhanVien,
+                    COALESCE(c.HoTen, N'Khách lẻ') AS TenKhachHang,
+                    c.SoDienThoai AS SoDienThoaiKhachHang,
+                    c.DiaChi AS DiaChiKhachHang,
+                    c.HangThanhVien AS HangThanhVienKhachHang,
                     i.GhiChu,
                     CASE
                         WHEN i.TrangThai = 'Paid' THEN N'Đã thanh toán'
@@ -35,6 +39,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     d.ThanhTien
                 FROM Invoices i
                 LEFT JOIN Users u ON i.MaNV = u.MaNV
+                LEFT JOIN Customers c ON i.MaKH = c.MaKH
                 LEFT JOIN InvoiceDetails d ON i.MaHD = d.MaHD
                 LEFT JOIN Products p ON d.MaSP = p.MaSP
                 WHERE i.MaHD = @MaHD
