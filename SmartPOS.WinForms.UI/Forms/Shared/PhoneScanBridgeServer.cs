@@ -1,5 +1,12 @@
+using SmartPOS.WinForms.BLL.Services;
 using SmartPOS.WinForms.Common.Helpers;
+using SmartPOS.WinForms.Common.Session;
+using SmartPOS.WinForms.DTO.Entities;
+using SmartPOS.WinForms.DTO.Requests;
+using SmartPOS.WinForms.DTO.Responses;
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -7,6 +14,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Web;
+using System.Web.Script.Serialization;
 using ZXing;
 using ZXing.Common;
 
@@ -21,11 +30,24 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
         private volatile bool _isStopping;
         private Thread _acceptThread;
 
+        private const string TransferBankCode = "TechCombank";
+        private const string TransferBankName = "TechCombank";
+        private const string TransferAccountNumber = "2005111818";
+        private const string TransferAccountName = "NHA HANG SMARTPOS";
+        private const string TransferContent = "Thanh toan hoa don POS";
+        private const string TransferTemplate = "compact2";
+
         public event Action<string> CodeReceived;
+        public event Action<int> InvoiceCreated;
 
         public PhoneScanBridgeServer()
+            : this(0)
         {
-            _listener = new TcpListener(IPAddress.Any, 0);
+        }
+
+        public PhoneScanBridgeServer(int preferredPort)
+        {
+            _listener = CreateListener(preferredPort);
             _barcodeReader = new BarcodeReader
             {
                 AutoRotate = true,
@@ -50,9 +72,36 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 }
             };
 
-            _listener.Start();
             _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
             _htmlPage = BuildHtmlPage();
+        }
+
+        private static TcpListener CreateListener(int preferredPort)
+        {
+            if (preferredPort > 0)
+            {
+                TcpListener preferredListener = null;
+                try
+                {
+                    preferredListener = new TcpListener(IPAddress.Any, preferredPort);
+                    preferredListener.Start();
+                    return preferredListener;
+                }
+                catch (SocketException)
+                {
+                    try
+                    {
+                        preferredListener?.Stop();
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            TcpListener fallbackListener = new TcpListener(IPAddress.Any, 0);
+            fallbackListener.Start();
+            return fallbackListener;
         }
 
         public int Port
@@ -184,13 +233,60 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         private void RouteRequest(NetworkStream stream, string method, string path, string body)
         {
-            if (method == "GET" && path == "/")
+            string routePath = path;
+            string queryString = string.Empty;
+            int queryIndex = path.IndexOf('?');
+            if (queryIndex >= 0)
+            {
+                routePath = path.Substring(0, queryIndex);
+                queryString = path.Substring(queryIndex + 1);
+            }
+
+            var query = HttpUtility.ParseQueryString(queryString);
+
+            if (method == "OPTIONS")
+            {
+                WriteResponse(stream, "204 No Content", "text/plain; charset=utf-8", string.Empty);
+                return;
+            }
+
+            if (method == "GET" && routePath == "/")
             {
                 WriteResponse(stream, "200 OK", "text/html; charset=utf-8", _htmlPage);
                 return;
             }
 
-            if (method == "POST" && path == "/api/code")
+            if (method == "GET" && routePath == "/api/health")
+            {
+                WriteResponse(stream, "200 OK", "application/json; charset=utf-8", "{\"ok\":true,\"app\":\"SmartPOS\"}");
+                return;
+            }
+
+            if (method == "GET" && routePath == "/api/product")
+            {
+                WriteProductResponse(stream, query["barcode"]);
+                return;
+            }
+
+            if (method == "GET" && routePath == "/api/payment")
+            {
+                WritePaymentResponse(stream, query["amount"]);
+                return;
+            }
+
+            if (method == "GET" && routePath == "/api/customers")
+            {
+                WriteCustomersResponse(stream, query["keyword"]);
+                return;
+            }
+
+            if (method == "POST" && routePath == "/api/checkout")
+            {
+                WriteCheckoutResponse(stream, body);
+                return;
+            }
+
+            if (method == "POST" && routePath == "/api/code")
             {
                 string normalizedCode = BarcodeHelper.Normalize(body);
                 if (string.IsNullOrWhiteSpace(normalizedCode))
@@ -204,7 +300,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 return;
             }
 
-            if (method == "POST" && path == "/api/image")
+            if (method == "POST" && routePath == "/api/image")
             {
                 string decodedCode = DecodeBarcodeFromBase64(body);
                 if (string.IsNullOrWhiteSpace(decodedCode))
@@ -219,6 +315,211 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
             }
 
             WriteResponse(stream, "404 Not Found", "text/plain; charset=utf-8", "Kh\u00f4ng t\u00ecm th\u1ea5y \u0111\u01b0\u1eddng d\u1eabn.");
+        }
+
+        private void WriteProductResponse(NetworkStream stream, string barcode)
+        {
+            string normalizedBarcode = BarcodeHelper.Normalize(HttpUtility.UrlDecode(barcode ?? string.Empty));
+            if (string.IsNullOrWhiteSpace(normalizedBarcode))
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8", "{\"found\":false,\"message\":\"Barcode is empty.\"}");
+                return;
+            }
+
+            try
+            {
+                ProductDTO product = new ProductService().GetByBarcode(normalizedBarcode);
+                if (product == null)
+                {
+                    WriteResponse(stream, "404 Not Found", "application/json; charset=utf-8",
+                        "{\"found\":false,\"barcode\":\"" + JsonEscape(normalizedBarcode) + "\",\"message\":\"Product not found.\"}");
+                    return;
+                }
+
+                bool isExpired = product.HanSuDung.HasValue && product.HanSuDung.Value.Date < DateTime.Today;
+                bool isSellable = product.TrangThai && product.SoLuongTon > 0 && !isExpired;
+
+                string json =
+                    "{" +
+                    "\"found\":true," +
+                    "\"product\":{" +
+                    "\"id\":" + product.MaSP.ToString(CultureInfo.InvariantCulture) + "," +
+                    "\"name\":\"" + JsonEscape(product.TenSP) + "\"," +
+                    "\"barcode\":\"" + JsonEscape(product.MaVach) + "\"," +
+                    "\"unit\":\"" + JsonEscape(product.DonViTinh) + "\"," +
+                    "\"price\":" + product.GiaBan.ToString("0.##", CultureInfo.InvariantCulture) + "," +
+                    "\"stock\":" + product.SoLuongTon.ToString(CultureInfo.InvariantCulture) + "," +
+                    "\"isActive\":" + JsonBool(product.TrangThai) + "," +
+                    "\"isExpired\":" + JsonBool(isExpired) + "," +
+                    "\"isSellable\":" + JsonBool(isSellable) +
+                    "}" +
+                    "}";
+
+                WriteResponse(stream, "200 OK", "application/json; charset=utf-8", json);
+            }
+            catch (Exception ex)
+            {
+                WriteResponse(stream, "500 Internal Server Error", "application/json; charset=utf-8",
+                    "{\"found\":false,\"message\":\"" + JsonEscape(ex.Message) + "\"}");
+            }
+        }
+
+        private void WritePaymentResponse(NetworkStream stream, string amountValue)
+        {
+            decimal amount;
+            if (!decimal.TryParse(amountValue, NumberStyles.Number, CultureInfo.InvariantCulture, out amount) || amount < 0)
+            {
+                amount = 0;
+            }
+
+            string amountText = decimal.Truncate(amount).ToString("0", CultureInfo.InvariantCulture);
+            string qrUrl = BuildTransferQrUrl(amount);
+
+            string json =
+                "{" +
+                "\"bankCode\":\"" + JsonEscape(TransferBankCode) + "\"," +
+                "\"bankName\":\"" + JsonEscape(TransferBankName) + "\"," +
+                "\"accountNumber\":\"" + JsonEscape(TransferAccountNumber) + "\"," +
+                "\"accountName\":\"" + JsonEscape(TransferAccountName) + "\"," +
+                "\"content\":\"" + JsonEscape(TransferContent) + "\"," +
+                "\"amount\":" + amountText + "," +
+                "\"qrUrl\":\"" + JsonEscape(qrUrl) + "\"" +
+                "}";
+
+            WriteResponse(stream, "200 OK", "application/json; charset=utf-8", json);
+        }
+
+        private void WriteCustomersResponse(NetworkStream stream, string keyword)
+        {
+            try
+            {
+                var request = new CustomerSearchRequest
+                {
+                    Keyword = HttpUtility.UrlDecode(keyword ?? string.Empty),
+                    TrangThai = true
+                };
+
+                IEnumerable<CustomerDTO> customers = new CustomerService()
+                    .Search(request)
+                    .Take(25);
+
+                StringBuilder jsonBuilder = new StringBuilder();
+                jsonBuilder.Append("{\"customers\":[");
+
+                bool isFirst = true;
+                foreach (CustomerDTO customer in customers)
+                {
+                    if (!isFirst)
+                    {
+                        jsonBuilder.Append(",");
+                    }
+
+                    isFirst = false;
+                    jsonBuilder.Append("{");
+                    jsonBuilder.Append("\"id\":").Append(customer.MaKH.ToString(CultureInfo.InvariantCulture)).Append(",");
+                    jsonBuilder.Append("\"name\":\"").Append(JsonEscape(customer.HoTen)).Append("\",");
+                    jsonBuilder.Append("\"phone\":\"").Append(JsonEscape(customer.SoDienThoai)).Append("\",");
+                    jsonBuilder.Append("\"rank\":\"").Append(JsonEscape(customer.HangThanhVien)).Append("\",");
+                    jsonBuilder.Append("\"points\":").Append(customer.DiemHienCo.ToString(CultureInfo.InvariantCulture));
+                    jsonBuilder.Append("}");
+                }
+
+                jsonBuilder.Append("]}");
+                WriteResponse(stream, "200 OK", "application/json; charset=utf-8", jsonBuilder.ToString());
+            }
+            catch (Exception ex)
+            {
+                WriteResponse(stream, "500 Internal Server Error", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"" + JsonEscape(ex.Message) + "\"}");
+            }
+        }
+
+        private void WriteCheckoutResponse(NetworkStream stream, string body)
+        {
+            if (SessionManager.CurrentUser == null)
+            {
+                WriteResponse(stream, "401 Unauthorized", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Chưa có nhân viên đăng nhập SmartPOS.\"}");
+                return;
+            }
+
+            MobileCheckoutRequest mobileRequest;
+            try
+            {
+                mobileRequest = new JavaScriptSerializer().Deserialize<MobileCheckoutRequest>(body ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Dữ liệu hóa đơn không hợp lệ: " + JsonEscape(ex.Message) + "\"}");
+                return;
+            }
+
+            if (mobileRequest == null || mobileRequest.Items == null || mobileRequest.Items.Count == 0)
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Hóa đơn từ điện thoại chưa có sản phẩm.\"}");
+                return;
+            }
+
+            CheckoutRequest checkoutRequest = new CheckoutRequest
+            {
+                MaNV = SessionManager.CurrentUser.MaNV,
+                MaKH = mobileRequest.CustomerId.HasValue && mobileRequest.CustomerId.Value > 0
+                    ? mobileRequest.CustomerId
+                    : null,
+                DiemSuDung = 0,
+                GhiChu = BuildMobileCheckoutNote(mobileRequest.PaymentMethod),
+                ChiTietHoaDon = mobileRequest.Items.Select(item => new InvoiceDetailDTO
+                {
+                    MaSP = item.ProductId,
+                    SoLuong = item.Quantity
+                }).ToList()
+            };
+
+            OperationResult result = new InvoiceService().Checkout(checkoutRequest);
+            if (!result.IsSuccess)
+            {
+                WriteResponse(stream, "422 Unprocessable Entity", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"" + JsonEscape(result.Message) + "\"}");
+                return;
+            }
+
+            int invoiceId = result.DataId.HasValue ? result.DataId.Value : 0;
+            if (invoiceId > 0)
+            {
+                InvoiceCreated?.Invoke(invoiceId);
+            }
+
+            WriteResponse(stream, "200 OK", "application/json; charset=utf-8",
+                "{\"success\":true,\"message\":\"" + JsonEscape(result.Message) + "\",\"invoiceId\":" +
+                invoiceId.ToString(CultureInfo.InvariantCulture) + "}");
+        }
+
+        private static string BuildMobileCheckoutNote(string paymentMethod)
+        {
+            string method = string.IsNullOrWhiteSpace(paymentMethod)
+                ? "Không rõ"
+                : paymentMethod.Trim();
+
+            return "Thanh toán từ app điện thoại - " + method;
+        }
+
+        private static string BuildTransferQrUrl(decimal amount)
+        {
+            string amountText = decimal.Truncate(amount).ToString("0", CultureInfo.InvariantCulture);
+            string addInfo = Uri.EscapeDataString(TransferContent);
+            string accountName = Uri.EscapeDataString(TransferAccountName);
+
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "https://img.vietqr.io/image/{0}-{1}-{2}.jpg?amount={3}&addInfo={4}&accountName={5}",
+                TransferBankCode,
+                TransferAccountNumber,
+                TransferTemplate,
+                amountText,
+                addInfo,
+                accountName);
         }
 
         private string DecodeBarcodeFromBase64(string body)
@@ -261,12 +562,51 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 "HTTP/1.1 " + status + "\r\n" +
                 "Content-Type: " + contentType + "\r\n" +
                 "Content-Length: " + contentBytes.Length + "\r\n" +
+                "Access-Control-Allow-Origin: *\r\n" +
+                "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+                "Access-Control-Allow-Headers: Content-Type\r\n" +
+                "Cache-Control: no-store\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
 
             byte[] headerBytes = Encoding.ASCII.GetBytes(headers);
             stream.Write(headerBytes, 0, headerBytes.Length);
             stream.Write(contentBytes, 0, contentBytes.Length);
+        }
+
+        private static string JsonBool(bool value)
+        {
+            return value ? "true" : "false";
+        }
+
+        private static string JsonEscape(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            return value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n");
+        }
+
+        private sealed class MobileCheckoutRequest
+        {
+            public int? CustomerId { get; set; }
+
+            public string PaymentMethod { get; set; }
+
+            public List<MobileCheckoutItem> Items { get; set; }
+        }
+
+        private sealed class MobileCheckoutItem
+        {
+            public int ProductId { get; set; }
+
+            public int Quantity { get; set; }
         }
 
         private static string BuildHtmlPage()

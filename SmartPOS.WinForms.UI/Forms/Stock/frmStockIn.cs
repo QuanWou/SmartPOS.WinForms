@@ -786,7 +786,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         {
             using (frmPhoneScannerBridge frm = new frmPhoneScannerBridge(
                 "Qu\u00e9t nh\u1eadp kho b\u1eb1ng \u0111i\u1ec7n tho\u1ea1i",
-                "D\u00f9ng camera \u0111i\u1ec7n tho\u1ea1i \u0111\u1ec3 ch\u1ee5p m\u00e3 v\u1ea1ch, g\u1eedi v\u1ec1 m\u00e1y t\u00ednh, r\u1ed3i app s\u1ebd t\u00ecm s\u1ea3n ph\u1ea9m v\u00e0 m\u1edf lu\u1ed3ng nh\u1eadp l\u00f4."))
+                "M\u1edf app SmartPOS Scanner tr\u00ean \u0111i\u1ec7n tho\u1ea1i, qu\u00e9t QR n\u00e0y \u0111\u1ec3 k\u1ebft n\u1ed1i, sau \u0111\u00f3 qu\u00e9t barcode s\u1ea3n ph\u1ea9m. M\u00e0n h\u00ecnh n\u00e0y s\u1ebd nh\u1eadn m\u1ed9t m\u00e3 r\u1ed3i m\u1edf lu\u1ed3ng nh\u1eadp l\u00f4."))
             {
                 if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
                 {

@@ -8,7 +8,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 {
     public class frmPhoneScannerBridge : Form
     {
-        private PhoneScanBridgeServer _server;
+        private readonly bool _closeAfterScan;
         private bool _scanCompleted;
 
         private Label lblTitle;
@@ -20,10 +20,18 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
         private Button btnCopy;
         private Button btnClose;
 
+        public event Action<string> ScanReceived;
+
         public string ScannedCode { get; private set; }
 
         public frmPhoneScannerBridge(string title, string instruction)
+            : this(title, instruction, true)
         {
+        }
+
+        public frmPhoneScannerBridge(string title, string instruction, bool closeAfterScan)
+        {
+            _closeAfterScan = closeAfterScan;
             InitializeComponent(title, instruction);
         }
 
@@ -107,7 +115,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
             Label lblTips = new Label
             {
-                Text = "1. \u0110i\u1ec7n tho\u1ea1i v\u00e0 m\u00e1y t\u00ednh ph\u1ea3i c\u00f9ng m\u1ea1ng.\r\n2. Tr\u00ean \u0111i\u1ec7n tho\u1ea1i, b\u1ea5m ch\u1ee5p \u1ea3nh m\u00e3 v\u1ea1ch.\r\n3. N\u1ebfu kh\u00f4ng m\u1edf \u0111\u01b0\u1ee3c trang, ki\u1ec3m tra Firewall c\u1ee7a Windows.",
+                Text = "1. \u0110i\u1ec7n tho\u1ea1i v\u00e0 m\u00e1y t\u00ednh ph\u1ea3i c\u00f9ng m\u1ea1ng.\r\n2. M\u1edf app SmartPOS Scanner v\u00e0 qu\u00e9t QR n\u00e0y \u0111\u1ec3 k\u1ebft n\u1ed1i.\r\n3. B\u1ea1n c\u00f3 th\u1ec3 \u0111\u00f3ng c\u1eeda s\u1ed5 n\u00e0y; server qu\u00e9t v\u1eabn ch\u1ea1y \u0111\u1ebfn khi tho\u00e1t SmartPOS.",
                 Font = new Font("Segoe UI", 9.25F),
                 ForeColor = Color.FromArgb(106, 116, 138),
                 AutoSize = false,
@@ -152,11 +160,10 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 return;
             }
 
-            _server = new PhoneScanBridgeServer();
-            _server.CodeReceived += Server_CodeReceived;
-            _server.Start();
+            PhoneScanBridgeHub.EnsureStarted();
+            PhoneScanBridgeHub.CodeReceived += Server_CodeReceived;
 
-            string url = "http://" + lanAddress + ":" + _server.Port + "/";
+            string url = PhoneScanBridgeHub.Url;
             txtUrl.Text = url;
             picQr.Image = BuildQrCode(url);
             lblStatus.Text = "\u0110ang ch\u1edd \u0111i\u1ec7n tho\u1ea1i g\u1eedi m\u00e3 t\u1eeb: " + lanAddress;
@@ -164,12 +171,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         private void FrmPhoneScannerBridge_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (_server != null)
-            {
-                _server.CodeReceived -= Server_CodeReceived;
-                _server.Dispose();
-                _server = null;
-            }
+            PhoneScanBridgeHub.CodeReceived -= Server_CodeReceived;
 
             if (picQr.Image != null)
             {
@@ -180,7 +182,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         private void Server_CodeReceived(string code)
         {
-            if (_scanCompleted || this.IsDisposed)
+            if ((_closeAfterScan && _scanCompleted) || this.IsDisposed)
             {
                 return;
             }
@@ -192,16 +194,21 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
             this.BeginInvoke(new Action(() =>
             {
-                if (_scanCompleted || this.IsDisposed)
+                if ((_closeAfterScan && _scanCompleted) || this.IsDisposed)
                 {
                     return;
                 }
 
-                _scanCompleted = true;
                 ScannedCode = code;
                 lblStatus.Text = "\u0110\u00e3 nh\u1eadn m\u00e3 t\u1eeb \u0111i\u1ec7n tho\u1ea1i: " + code;
-                this.DialogResult = DialogResult.OK;
-                this.Close();
+                ScanReceived?.Invoke(code);
+
+                if (_closeAfterScan)
+                {
+                    _scanCompleted = true;
+                    this.DialogResult = DialogResult.OK;
+                    this.Close();
+                }
             }));
         }
 

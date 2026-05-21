@@ -115,14 +115,36 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             BuildLayout();
 
             this.Load += FrmPOS_Load;
+            this.FormClosed += FrmPOS_FormClosed;
             this.KeyDown += FrmPOS_KeyDown;
         }
 
         private void FrmPOS_Load(object sender, EventArgs e)
         {
+            PhoneScanBridgeHub.InvoiceCreated += PhoneScanBridgeHub_InvoiceCreated;
             LoadProducts();
             UpdateSelectedCustomerView();
             RefreshCartView();
+        }
+
+        private void FrmPOS_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            PhoneScanBridgeHub.InvoiceCreated -= PhoneScanBridgeHub_InvoiceCreated;
+        }
+
+        private void PhoneScanBridgeHub_InvoiceCreated(int invoiceId)
+        {
+            if (this.IsDisposed || !this.IsHandleCreated)
+            {
+                return;
+            }
+
+            this.BeginInvoke(new Action(() =>
+            {
+                LoadProducts();
+                RefreshCartView();
+                MessageBox.Show("Đã nhận hóa đơn #" + invoiceId + " từ app điện thoại.", "SmartPOS");
+            }));
         }
 
         private void FrmPOS_KeyDown(object sender, KeyEventArgs e)
@@ -1304,16 +1326,24 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         {
             using (frmPhoneScannerBridge frm = new frmPhoneScannerBridge(
                 "Qu\u00e9t b\u1eb1ng \u0111i\u1ec7n tho\u1ea1i",
-                "M\u1edf \u0111i\u1ec7n tho\u1ea1i c\u00f9ng m\u1ea1ng, qu\u00e9t QR \u0111\u1ec3 m\u1edf trang g\u1eedi m\u00e3, r\u1ed3i ch\u1ee5p \u1ea3nh barcode b\u1eb1ng camera \u0111i\u1ec7n tho\u1ea1i."))
+                "M\u1edf app SmartPOS Scanner tr\u00ean \u0111i\u1ec7n tho\u1ea1i, qu\u00e9t QR n\u00e0y \u0111\u1ec3 k\u1ebft n\u1ed1i, sau \u0111\u00f3 qu\u00e9t barcode s\u1ea3n ph\u1ea9m. C\u00f3 th\u1ec3 qu\u00e9t nhi\u1ec1u m\u00e3 li\u00ean ti\u1ebfp cho \u0111\u1ebfn khi b\u1ea5m \u0110\u00f3ng.",
+                false))
             {
-                if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
-                {
-                    return;
-                }
-
-                txtSearch.Text = frm.ScannedCode;
-                SearchProducts();
+                frm.ScanReceived += PhoneScannerBridge_ScanReceived;
+                frm.ShowDialog(this);
+                frm.ScanReceived -= PhoneScannerBridge_ScanReceived;
             }
+        }
+
+        private void PhoneScannerBridge_ScanReceived(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return;
+            }
+
+            txtSearch.Text = code;
+            SearchProducts();
         }
 
         private void TxtSearch_KeyDown(object sender, KeyEventArgs e)
