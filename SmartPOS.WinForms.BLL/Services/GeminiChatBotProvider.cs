@@ -421,7 +421,7 @@ namespace SmartPOS.WinForms.BLL.Services
                 {
                     continue;
                 }
-
+                //test thu commit
                 foreach (object partItem in Enumerate(content["parts"]))
                 {
                     var part = partItem as Dictionary<string, object>;
