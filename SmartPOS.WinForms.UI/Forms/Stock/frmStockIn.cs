@@ -64,6 +64,8 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         private int? _selectedProductId;
         private Guid? _editingLineId;
         private bool _suppressProductSelectionChanged;
+        private bool _isProcessingPhoneScan;
+        private bool _showScannedProductsOnly;
 
         public frmStockIn()
             : this(null, false)
@@ -587,6 +589,12 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 .Where(x => x.TrangThai)
                 .ToList();
 
+            if (_showScannedProductsOnly)
+            {
+                RefreshScannedProductsGrid();
+                return;
+            }
+
             BindProductsGrid(_products);
         }
 
@@ -675,6 +683,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void SearchProducts()
         {
+            _showScannedProductsOnly = false;
             string keyword = txtSearch.Text.Trim();
 
             if (string.IsNullOrWhiteSpace(keyword))
@@ -784,31 +793,74 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void BtnPhoneScan_Click(object sender, EventArgs e)
         {
+            _showScannedProductsOnly = true;
+            txtSearch.Clear();
+            RefreshScannedProductsGrid();
+
             using (frmPhoneScannerBridge frm = new frmPhoneScannerBridge(
                 "Qu\u00e9t nh\u1eadp kho b\u1eb1ng \u0111i\u1ec7n tho\u1ea1i",
-                "M\u1edf app SmartPOS Scanner tr\u00ean \u0111i\u1ec7n tho\u1ea1i, qu\u00e9t QR n\u00e0y \u0111\u1ec3 k\u1ebft n\u1ed1i, sau \u0111\u00f3 qu\u00e9t barcode s\u1ea3n ph\u1ea9m. M\u00e0n h\u00ecnh n\u00e0y s\u1ebd nh\u1eadn m\u1ed9t m\u00e3 r\u1ed3i m\u1edf lu\u1ed3ng nh\u1eadp l\u00f4."))
+                "M\u1edf app SmartPOS Scanner tr\u00ean \u0111i\u1ec7n tho\u1ea1i, qu\u00e9t QR n\u00e0y \u0111\u1ec3 k\u1ebft n\u1ed1i, sau \u0111\u00f3 qu\u00e9t barcode s\u1ea3n ph\u1ea9m li\u00ean t\u1ee5c. M\u00e3 c\u0169 s\u1ebd \u0111\u01b0\u1ee3c th\u00eam v\u00e0o phi\u1ebfu nh\u1eadp, m\u00e3 m\u1edbi s\u1ebd m\u1edf form th\u00eam s\u1ea3n ph\u1ea9m.",
+                false,
+                "code"))
             {
-                if (frm.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(frm.ScannedCode))
+                Action<string> handler = code => ProcessPhoneStockInScan(code, frm);
+                frm.ScanReceived += handler;
+                frm.ShowDialog(this);
+                frm.ScanReceived -= handler;
+            }
+        }
+
+        private void ProcessPhoneStockInScan(string code, IWin32Window owner)
+        {
+            if (_isProcessingPhoneScan || string.IsNullOrWhiteSpace(code))
+            {
+                return;
+            }
+
+            _isProcessingPhoneScan = true;
+            try
+            {
+                ProductDTO product = ResolveScannedProductForStockIn(code, owner);
+                if (product == null)
                 {
                     return;
                 }
 
-                txtSearch.Text = frm.ScannedCode;
-                SearchProducts();
-
-                ProductDTO product = FindProductByBarcode(frm.ScannedCode);
-                if (product == null)
-                {
-                    product = PromptCreateProductFromBarcode(frm.ScannedCode);
-                    if (product == null)
-                    {
-                        return;
-                    }
-                }
-
                 SelectProductRow(product.MaSP);
                 AddProductToStockIn(product);
+                AddLineFromEditor();
             }
+            finally
+            {
+                _showScannedProductsOnly = true;
+                txtSearch.Clear();
+                RefreshScannedProductsGrid();
+                _isProcessingPhoneScan = false;
+            }
+        }
+
+        private ProductDTO ResolveScannedProductForStockIn(string code, IWin32Window owner)
+        {
+            ProductDTO product = FindProductByBarcode(code);
+            if (product != null)
+            {
+                return product;
+            }
+
+            return PromptCreateProductFromBarcode(code, owner);
+        }
+
+        private void RefreshScannedProductsGrid()
+        {
+            List<ProductDTO> productSource = _products ?? new List<ProductDTO>();
+
+            HashSet<int> scannedProductIds = new HashSet<int>(_stockInItems.Select(x => x.MaSP));
+
+            List<ProductDTO> scannedProducts = productSource
+                .Where(x => scannedProductIds.Contains(x.MaSP))
+                .ToList();
+
+            BindProductsGrid(scannedProducts);
         }
 
         private void DgvStockInDetails_DoubleClick(object sender, EventArgs e)
@@ -856,6 +908,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             {
                 _stockInItems.Clear();
                 txtGhiChu.Clear();
+                _showScannedProductsOnly = false;
                 RefreshStockInDetailsView();
                 ClearLineEditor();
                 LoadProducts();
@@ -928,17 +981,23 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private ProductDTO PromptCreateProductFromBarcode(string barcode)
         {
+            return PromptCreateProductFromBarcode(barcode, this);
+        }
+
+        private ProductDTO PromptCreateProductFromBarcode(string barcode, IWin32Window owner)
+        {
             string normalizedBarcode = string.IsNullOrWhiteSpace(barcode)
                 ? string.Empty
                 : barcode.Trim();
 
             if (!BarcodeHelper.IsValidBarcode(normalizedBarcode))
             {
-                MessageBox.Show("Không tìm thấy sản phẩm theo mã vừa quét.", "Thông báo");
+                MessageBox.Show(owner, "Không tìm thấy sản phẩm theo mã vừa quét.", "Thông báo");
                 return null;
             }
 
             DialogResult result = MessageBox.Show(
+                owner,
                 "Mã vạch này chưa có trong hệ thống. Bạn có muốn chuyển sang thêm sản phẩm mới không?",
                 "Sản phẩm mới",
                 MessageBoxButtons.YesNo,
@@ -951,7 +1010,7 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             using (var frm = new frmProductEdit(normalizedBarcode))
             {
-                frm.ShowDialog(this);
+                frm.ShowDialog(owner ?? this);
                 if (!frm.IsSavedSuccessfully)
                 {
                     return null;
@@ -959,13 +1018,21 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
             }
 
             LoadProducts();
-            txtSearch.Text = normalizedBarcode;
-            SearchProducts();
+            if (_showScannedProductsOnly)
+            {
+                txtSearch.Clear();
+                RefreshScannedProductsGrid();
+            }
+            else
+            {
+                txtSearch.Text = normalizedBarcode;
+                SearchProducts();
+            }
 
             ProductDTO product = FindProductByBarcode(normalizedBarcode);
             if (product == null)
             {
-                MessageBox.Show("Đã lưu sản phẩm mới nhưng chưa đọc lại được dữ liệu sản phẩm.", "Thông báo");
+                MessageBox.Show(owner, "Đã lưu sản phẩm mới nhưng chưa đọc lại được dữ liệu sản phẩm.", "Thông báo");
                 return null;
             }
 
@@ -1174,6 +1241,10 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
             _stockInItems.Remove(item);
             RefreshStockInDetailsView();
+            if (_showScannedProductsOnly)
+            {
+                RefreshScannedProductsGrid();
+            }
             ClearLineEditor();
         }
 

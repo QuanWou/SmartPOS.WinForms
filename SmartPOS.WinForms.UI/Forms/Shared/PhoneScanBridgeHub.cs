@@ -1,4 +1,5 @@
 using System;
+using SmartPOS.WinForms.UI.Helpers;
 
 namespace SmartPOS.WinForms.UI.Forms.Shared
 {
@@ -24,6 +25,8 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         public static void EnsureStarted()
         {
+            PhoneBridgeFirewallHelper.EnsureWhenBridgeStarts();
+
             lock (SyncRoot)
             {
                 if (_server != null)

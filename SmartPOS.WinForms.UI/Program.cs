@@ -2,6 +2,7 @@
 using System.Windows.Forms;
 using SmartPOS.WinForms.UI.Forms.Aulh;
 using SmartPOS.WinForms.UI.Forms.Shared;
+using SmartPOS.WinForms.UI.Helpers;
 
 namespace SmartPOS.WinForms.UI
 {
@@ -12,6 +13,7 @@ namespace SmartPOS.WinForms.UI
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            PhoneBridgeFirewallHelper.EnsureAsync();
             try
             {
                 Application.Run(new frmLogin());

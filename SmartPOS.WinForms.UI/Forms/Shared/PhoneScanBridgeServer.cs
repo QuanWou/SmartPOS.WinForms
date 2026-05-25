@@ -11,6 +11,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -32,7 +33,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         private const string TransferBankCode = "TechCombank";
         private const string TransferBankName = "TechCombank";
-        private const string TransferAccountNumber = "2005111818";
+        private const string TransferAccountNumber = "19072952746016";
         private const string TransferAccountName = "NHA HANG SMARTPOS";
         private const string TransferContent = "Thanh toan hoa don POS";
         private const string TransferTemplate = "compact2";
@@ -134,14 +135,85 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         public static string GetBestLanAddress()
         {
-            IPAddress bestAddress = Dns.GetHostEntry(Dns.GetHostName())
-                .AddressList
-                .FirstOrDefault(ip =>
-                    ip.AddressFamily == AddressFamily.InterNetwork &&
-                    !IPAddress.IsLoopback(ip) &&
-                    !ip.ToString().StartsWith("169.254.", StringComparison.OrdinalIgnoreCase));
+            IPAddress bestAddress = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(adapter =>
+                    adapter.OperationalStatus == OperationalStatus.Up &&
+                    adapter.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                    adapter.NetworkInterfaceType != NetworkInterfaceType.Tunnel)
+                .SelectMany(adapter =>
+                {
+                    IPInterfaceProperties properties = adapter.GetIPProperties();
+                    return properties.UnicastAddresses
+                        .Where(address => IsUsableLanAddress(address.Address))
+                        .Select(address => new
+                        {
+                            Address = address.Address,
+                            Score = GetAdapterScore(adapter, properties)
+                        });
+                })
+                .OrderByDescending(item => item.Score)
+                .ThenBy(item => item.Address.ToString())
+                .Select(item => item.Address)
+                .FirstOrDefault();
+
+            if (bestAddress == null)
+            {
+                bestAddress = Dns.GetHostEntry(Dns.GetHostName())
+                    .AddressList
+                    .FirstOrDefault(IsUsableLanAddress);
+            }
 
             return bestAddress != null ? bestAddress.ToString() : string.Empty;
+        }
+
+        private static bool IsUsableLanAddress(IPAddress address)
+        {
+            if (address == null ||
+                address.AddressFamily != AddressFamily.InterNetwork ||
+                IPAddress.IsLoopback(address))
+            {
+                return false;
+            }
+
+            string value = address.ToString();
+            return !value.StartsWith("169.254.", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int GetAdapterScore(NetworkInterface adapter, IPInterfaceProperties properties)
+        {
+            string name = (adapter.Name ?? string.Empty) + " " + (adapter.Description ?? string.Empty);
+            int score = 0;
+
+            if (properties.GatewayAddresses.Any(gateway => IsUsableLanAddress(gateway.Address)))
+            {
+                score += 100;
+            }
+
+            if (adapter.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+            {
+                score += 40;
+            }
+            else if (adapter.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                     adapter.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet)
+            {
+                score += 20;
+            }
+
+            if (name.IndexOf("wi-fi", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("wireless", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score += 10;
+            }
+
+            if (name.IndexOf("vmware", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("virtual", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("vbox", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("hyper-v", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score -= 100;
+            }
+
+            return score;
         }
 
         private void AcceptLoop()
