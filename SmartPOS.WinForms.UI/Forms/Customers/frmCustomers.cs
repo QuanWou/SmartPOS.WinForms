@@ -19,6 +19,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
     public class frmCustomers : Form, IGlobalSearchHandler
     {
         private readonly ICustomerService _customerService;
+        private readonly ICustomerOfferService _customerOfferService;
 
         private Label lblTitle;
         private Label lblSubtitle;
@@ -55,6 +56,9 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
         private DonutChartPanel pnlCategoryChart;
         private FlowLayoutPanel flpCategoryLegend;
         private FlowLayoutPanel flpTopProducts;
+        private Label lblOfferTitle;
+        private FlowLayoutPanel flpOffers;
+        private Label lblInsightTitle;
         private FlowLayoutPanel flpInsights;
         private Button btnRedeem;
         private Button btnCreateOffer;
@@ -74,6 +78,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
         public frmCustomers()
         {
             _customerService = new CustomerService();
+            _customerOfferService = new CustomerOfferService();
             InitializeComponent();
         }
 
@@ -373,10 +378,20 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
                 BackColor = Surface
             };
 
-            var lblInsightTitle = MakeSectionTitle("Xu hướng tiêu dùng", 18, 546);
-            flpInsights = new FlowLayoutPanel
+            lblOfferTitle = MakeSectionTitle("Uu dai con hieu luc", 18, 546);
+            flpOffers = new FlowLayoutPanel
             {
                 Location = new Point(18, 578),
+                Size = new Size(340, 88),
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                BackColor = Surface
+            };
+
+            lblInsightTitle = MakeSectionTitle("Xu hướng tiêu dùng", 18, 684);
+            flpInsights = new FlowLayoutPanel
+            {
+                Location = new Point(18, 716),
                 Size = new Size(340, 130),
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
@@ -391,7 +406,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             btnCreateOffer = MakeButton("🎁  Tạo ưu đãi", Surface, Primary, 96);
             btnCreateOffer.FlatAppearance.BorderColor = Border;
             btnCreateOffer.FlatAppearance.BorderSize = 1;
-            btnCreateOffer.Click += (s, e) => MessageBox.Show("Chức năng tạo ưu đãi sẽ dùng dữ liệu xu hướng của khách hàng đang chọn.", "Tạo ưu đãi");
+            btnCreateOffer.Click += BtnCreateOffer_Click;
 
             btnViewHistory = MakeButton("☷  Xem lịch sử mua", Surface, Primary, 96);
             btnViewHistory.FlatAppearance.BorderColor = Border;
@@ -402,7 +417,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             {
                 lblAvatar, lblDetailName, lblDetailRank, lblDetailPhone, lblDetailAddress, lblDetailJoinDate,
                 lblCategoryTitle, pnlCategoryChart, flpCategoryLegend, lblTopTitle, flpTopProducts,
-                lblInsightTitle, flpInsights, btnRedeem, btnCreateOffer, btnViewHistory
+                lblOfferTitle, flpOffers, lblInsightTitle, flpInsights, btnRedeem, btnCreateOffer, btnViewHistory
             });
         }
 
@@ -634,6 +649,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
                 pnlCategoryChart.SetData(new List<CustomerCategoryTrendResponse>());
                 flpCategoryLegend.Controls.Clear();
                 flpTopProducts.Controls.Clear();
+                flpOffers.Controls.Clear();
                 flpInsights.Controls.Clear();
                 return;
             }
@@ -655,6 +671,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             pnlCategoryChart.SetData(categories);
             BindCategoryLegend(categories);
             BindTopProducts(_customerService.GetTopProducts(customer.MaKH).ToList());
+            BindOffers(_customerOfferService.GetAvailableByCustomerId(customer.MaKH).ToList());
             BindInsights(customer, categories);
         }
 
@@ -708,6 +725,39 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
                     Margin = new Padding(0, 0, 0, 4)
                 };
                 flpTopProducts.Controls.Add(row);
+            }
+        }
+
+        private void BindOffers(List<CustomerOfferDTO> offers)
+        {
+            flpOffers.Controls.Clear();
+
+            if (offers.Count == 0)
+            {
+                flpOffers.Controls.Add(MakeInfoLabel("Chua co uu dai dang hieu luc."));
+                return;
+            }
+
+            for (int i = 0; i < offers.Count && i < 3; i++)
+            {
+                CustomerOfferDTO offer = offers[i];
+                string expiry = offer.NgayHetHan.HasValue
+                    ? " | HSD " + offer.NgayHetHan.Value.ToString("dd/MM/yyyy")
+                    : " | Khong HSD";
+
+                var row = new Label
+                {
+                    Text = offer.TenUuDai + " - " + offer.PhanTramGiam.ToString("N0") + "%" + expiry,
+                    ForeColor = Color.FromArgb(45, 120, 75),
+                    BackColor = Color.FromArgb(232, 248, 238),
+                    Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+                    AutoSize = false,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Size = new Size(320, 24),
+                    Margin = new Padding(0, 0, 0, 5),
+                    Padding = new Padding(8, 0, 6, 0)
+                };
+                flpOffers.Controls.Add(row);
             }
         }
 
@@ -784,6 +834,24 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
         private void BtnHistory_Click(object sender, EventArgs e)
         {
             ShowSelectedCustomerHistory();
+        }
+
+        private void BtnCreateOffer_Click(object sender, EventArgs e)
+        {
+            CustomerDTO customer = GetSelectedCustomer();
+            if (customer == null)
+            {
+                return;
+            }
+
+            using (var frm = new frmCustomerOfferEdit(customer))
+            {
+                frm.ShowDialog(this);
+                if (frm.IsSavedSuccessfully)
+                {
+                    BindCustomerDetail(_customerService.GetById(customer.MaKH));
+                }
+            }
         }
 
         private void ShowSelectedCustomerHistory()
@@ -1152,11 +1220,19 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             flpCategoryLegend.SetBounds(135, 268, Math.Max(160, w - 150), 110);
 
             flpTopProducts.SetBounds(pad, 426, w - pad * 2, 102);
-            flpInsights.SetBounds(pad, 578, w - pad * 2, 130);
+            lblOfferTitle.SetBounds(pad, 546, w - pad * 2, 24);
+            flpOffers.SetBounds(pad, 578, w - pad * 2, 88);
+            lblInsightTitle.SetBounds(pad, 684, w - pad * 2, 24);
+            flpInsights.SetBounds(pad, 716, w - pad * 2, 130);
 
             foreach (Control c in flpTopProducts.Controls)
             {
                 c.Width = flpTopProducts.Width - 4;
+            }
+
+            foreach (Control c in flpOffers.Controls)
+            {
+                c.Width = flpOffers.Width - 4;
             }
 
             foreach (Control c in flpInsights.Controls)
@@ -1165,7 +1241,7 @@ namespace SmartPOS.WinForms.UI.Forms.Customers
             }
 
             // Nút dưới cùng
-            int buttonY = Math.Max(730, pnlRight.ClientSize.Height - 46);
+            int buttonY = Math.Max(865, pnlRight.ClientSize.Height - 46);
             int buttonGap = 8;
             int buttonW = Math.Max(82, (w - pad * 2 - buttonGap * 2) / 3);
 

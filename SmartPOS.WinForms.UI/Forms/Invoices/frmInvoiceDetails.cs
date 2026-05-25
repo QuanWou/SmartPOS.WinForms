@@ -23,6 +23,12 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
         private Label lblTitle;
         private Label lblSubtitle;
         private Label lblInvoiceInfo;
+        private Label lblTamTinh;
+        private Label lblTamTinhValue;
+        private Label lblGiamGiaUuDai;
+        private Label lblGiamGiaUuDaiValue;
+        private Label lblGiamGiaDiem;
+        private Label lblGiamGiaDiemValue;
         private Label lblTongTien;
         private Label lblTongTienValue;
         private Label lblGhiChu;
@@ -99,11 +105,11 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
 
             lblTongTien = new Label
             {
-                Text = "Tổng tiền",
+                Text = "Cần thanh toán",
                 Font = new Font("Segoe UI", 10F),
                 ForeColor = Color.FromArgb(70, 70, 70),
                 AutoSize = true,
-                Location = new Point(20, 475)
+                Location = new Point(20, 548)
             };
 
             lblTongTienValue = new Label
@@ -112,8 +118,17 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
                 Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(22, 32, 72),
                 AutoSize = true,
-                Location = new Point(20, 500)
+                Location = new Point(20, 570)
             };
+
+            lblTamTinh = MakeSummaryLabel("Tạm tính", 20, 475);
+            lblTamTinhValue = MakeSummaryValueLabel(150, 475);
+
+            lblGiamGiaUuDai = MakeSummaryLabel("Giảm ưu đãi", 20, 500);
+            lblGiamGiaUuDaiValue = MakeSummaryValueLabel(150, 500);
+
+            lblGiamGiaDiem = MakeSummaryLabel("Giảm từ điểm", 20, 525);
+            lblGiamGiaDiemValue = MakeSummaryValueLabel(150, 525);
 
             lblGhiChu = new Label
             {
@@ -157,6 +172,12 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             this.Controls.Add(lblSubtitle);
             this.Controls.Add(lblInvoiceInfo);
             this.Controls.Add(dgvDetails);
+            this.Controls.Add(lblTamTinh);
+            this.Controls.Add(lblTamTinhValue);
+            this.Controls.Add(lblGiamGiaUuDai);
+            this.Controls.Add(lblGiamGiaUuDaiValue);
+            this.Controls.Add(lblGiamGiaDiem);
+            this.Controls.Add(lblGiamGiaDiemValue);
             this.Controls.Add(lblTongTien);
             this.Controls.Add(lblTongTienValue);
             this.Controls.Add(lblGhiChu);
@@ -217,6 +238,32 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             });
         }
 
+        private Label MakeSummaryLabel(string text, int x, int y)
+        {
+            return new Label
+            {
+                Text = text,
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(90, 90, 90),
+                AutoSize = true,
+                Location = new Point(x, y)
+            };
+        }
+
+        private Label MakeSummaryValueLabel(int x, int y)
+        {
+            return new Label
+            {
+                Text = "0 đ",
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(22, 32, 72),
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleRight,
+                Size = new Size(125, 22),
+                Location = new Point(x, y - 3)
+            };
+        }
+
         private void LoadInvoiceDetails()
         {
             InvoiceDTO invoice = _invoiceService.GetById(_maHD);
@@ -237,13 +284,32 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
             }
 
             UserDTO user = _userService.GetById(invoice.MaNV);
-            IEnumerable<InvoiceDetailDTO> details = _invoiceService.GetDetailsByInvoiceId(_maHD);
+            List<InvoiceDetailDTO> details = _invoiceService.GetDetailsByInvoiceId(_maHD).ToList();
 
             lblInvoiceInfo.Text =
                 "Mã HĐ: " + invoice.MaHD +
                 "   |   Ngày lập: " + invoice.NgayLap.ToString("dd/MM/yyyy HH:mm") +
                 "   |   Nhân viên: " + (user != null ? user.TenNV : string.Empty);
 
+            decimal subtotal = invoice.TongTienTruocGiam > 0
+                ? invoice.TongTienTruocGiam
+                : details.Sum(x => x.ThanhTien);
+            bool hasOfferDiscount = invoice.GiamGiaUuDai > 0 || invoice.MaUuDai.HasValue;
+            bool hasPointDiscount = invoice.DiemSuDung > 0 || invoice.GiamGiaDiem > 0;
+
+            lblTamTinhValue.Text = subtotal.ToString("N0") + " đ";
+            lblGiamGiaUuDaiValue.Text = invoice.GiamGiaUuDai.ToString("N0") + " đ";
+            lblGiamGiaUuDai.Text = invoice.PhanTramUuDai > 0
+                ? "Giảm ưu đãi (" + invoice.PhanTramUuDai.ToString("N0") + "%)"
+                : "Giảm ưu đãi";
+            lblGiamGiaDiem.Text = invoice.DiemSuDung > 0
+                ? "Giảm từ điểm (" + invoice.DiemSuDung.ToString("N0") + " điểm)"
+                : "Giảm từ điểm";
+            lblGiamGiaDiemValue.Text = invoice.GiamGiaDiem.ToString("N0") + " đ";
+            lblGiamGiaUuDai.Visible = hasOfferDiscount;
+            lblGiamGiaUuDaiValue.Visible = hasOfferDiscount;
+            lblGiamGiaDiem.Visible = hasPointDiscount;
+            lblGiamGiaDiemValue.Visible = hasPointDiscount;
             lblTongTienValue.Text = invoice.TongTien.ToString("N0") + " đ";
             txtGhiChu.Text = invoice.GhiChu ?? string.Empty;
 
@@ -292,16 +358,37 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
                 Math.Max(220, footerTop - gridTop - 20));
 
             int infoTop = dgvDetails.Bottom + 20;
-            lblTongTien.Location = new Point(left, infoTop);
-            lblTongTienValue.Location = new Point(left, infoTop + 25);
-            lblGhiChu.Location = new Point(260, infoTop);
+            int summaryValueLeft = 150;
+            int summaryY = infoTop;
+
+            lblTamTinh.Location = new Point(left, summaryY);
+            lblTamTinhValue.Location = new Point(summaryValueLeft, summaryY - 3);
+            summaryY += 25;
+
+            if (lblGiamGiaUuDai.Visible)
+            {
+                lblGiamGiaUuDai.Location = new Point(left, summaryY);
+                lblGiamGiaUuDaiValue.Location = new Point(summaryValueLeft, summaryY - 3);
+                summaryY += 25;
+            }
+
+            if (lblGiamGiaDiem.Visible)
+            {
+                lblGiamGiaDiem.Location = new Point(left, summaryY);
+                lblGiamGiaDiemValue.Location = new Point(summaryValueLeft, summaryY - 3);
+                summaryY += 25;
+            }
+
+            lblTongTien.Location = new Point(left, summaryY);
+            lblTongTienValue.Location = new Point(left, summaryY + 23);
+            lblGhiChu.Location = new Point(330, infoTop);
 
             btnClose.Location = new Point(ClientSize.Width - right - btnClose.Width, infoTop + 17);
             btnPrint.Location = new Point(btnClose.Left - 10 - btnPrint.Width, infoTop + 17);
             txtGhiChu.SetBounds(
-                260,
+                330,
                 infoTop + 22,
-                Math.Max(220, btnPrint.Left - 20 - 260),
+                Math.Max(220, btnPrint.Left - 20 - 330),
                 txtGhiChu.Height);
         }
     }

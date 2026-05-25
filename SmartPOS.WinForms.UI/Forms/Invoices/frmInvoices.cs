@@ -331,6 +331,8 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
                 x.MaHD,
                 NgayLap = x.NgayLap.ToString("dd/MM/yyyy HH:mm"),
                 NhanVien = GetNhanVienName(x.MaNV),
+                TruocGiam = (x.TongTienTruocGiam > 0 ? x.TongTienTruocGiam : x.TongTien + x.GiamGiaUuDai + x.GiamGiaDiem).ToString("N0"),
+                GiamGia = (x.GiamGiaUuDai + x.GiamGiaDiem).ToString("N0"),
                 TongTien = x.TongTien.ToString("N0"),
                 x.GhiChu,
                 TrangThai = GetTrangThaiText(x.TrangThai)
@@ -389,8 +391,24 @@ namespace SmartPOS.WinForms.UI.Forms.Invoices
 
             dgvInvoices.Columns.Add(new DataGridViewTextBoxColumn
             {
+                Name = "TruocGiam",
+                HeaderText = "Trước giảm",
+                DataPropertyName = "TruocGiam",
+                Width = 120
+            });
+
+            dgvInvoices.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "GiamGia",
+                HeaderText = "Giảm",
+                DataPropertyName = "GiamGia",
+                Width = 110
+            });
+
+            dgvInvoices.Columns.Add(new DataGridViewTextBoxColumn
+            {
                 Name = "TongTien",
-                HeaderText = "Tổng tiền",
+                HeaderText = "Thanh toán",
                 DataPropertyName = "TongTien",
                 Width = 140
             });

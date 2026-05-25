@@ -61,6 +61,7 @@
     <Compile Include="Interfaces\ICategoryRepository.cs" />
     <Compile Include="Interfaces\IChatBotRepository.cs" />
     <Compile Include="Interfaces\ICustomerRepository.cs" />
+    <Compile Include="Interfaces\ICustomerOfferRepository.cs" />
     <Compile Include="Interfaces\IInvoiceRepository.cs" />
     <Compile Include="Interfaces\IProductLotRepository.cs" />
     <Compile Include="Interfaces\IProductRepository.cs" />
@@ -71,6 +72,7 @@
     <Compile Include="Repositories\CategoryRepository.cs" />
     <Compile Include="Repositories\ChatBotRepository.cs" />
     <Compile Include="Repositories\CustomerRepository.cs" />
+    <Compile Include="Repositories\CustomerOfferRepository.cs" />
     <Compile Include="Repositories\InvoiceRepository.cs" />
     <Compile Include="Repositories\ProductLotRepository.cs" />
     <Compile Include="Repositories\ProductRepository.cs" />

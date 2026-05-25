@@ -18,6 +18,12 @@ namespace SmartPOS.WinForms.DTO.Entities
 
         public decimal TongTienTruocGiam { get; set; }
 
+        public int? MaUuDai { get; set; }
+
+        public decimal PhanTramUuDai { get; set; }
+
+        public decimal GiamGiaUuDai { get; set; }
+
         public int DiemSuDung { get; set; }
 
         public decimal GiamGiaDiem { get; set; }

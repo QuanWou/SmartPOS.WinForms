@@ -22,6 +22,20 @@ namespace SmartPOS.WinForms.DTO.Responses
 
         public string TrangThai { get; set; }
 
+        public decimal TongTienTruocGiam { get; set; }
+
+        public int? MaUuDai { get; set; }
+
+        public string TenUuDai { get; set; }
+
+        public decimal PhanTramUuDai { get; set; }
+
+        public decimal GiamGiaUuDai { get; set; }
+
+        public int DiemSuDung { get; set; }
+
+        public decimal GiamGiaDiem { get; set; }
+
         public decimal TongTien { get; set; }
 
         public int MaSP { get; set; }
