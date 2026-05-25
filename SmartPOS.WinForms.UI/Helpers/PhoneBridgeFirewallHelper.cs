@@ -33,12 +33,7 @@ namespace SmartPOS.WinForms.UI.Helpers
 
         public static void EnsureWhenBridgeStarts()
         {
-            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
-            {
-                return;
-            }
-
-            Ensure();
+            EnsureAsync();
         }
 
         private static void Ensure()

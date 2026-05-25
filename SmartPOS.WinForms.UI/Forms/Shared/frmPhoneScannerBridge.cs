@@ -159,7 +159,8 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         private void FrmPhoneScannerBridge_Load(object sender, EventArgs e)
         {
-            string lanAddress = PhoneScanBridgeServer.GetBestLanAddress();
+            string baseUrl = PhoneScanBridgeHub.Url;
+            string lanAddress = GetHostFromUrl(baseUrl);
             if (string.IsNullOrWhiteSpace(lanAddress))
             {
                 MessageBox.Show("Kh\u00f4ng t\u00ecm th\u1ea5y \u0111\u1ecba ch\u1ec9 m\u1ea1ng n\u1ed9i b\u1ed9. H\u00e3y k\u1ebft n\u1ed1i Wi-Fi/LAN r\u1ed3i m\u1edf l\u1ea1i t\u00ednh n\u0103ng n\u00e0y.", "Th\u00f4ng b\u00e1o");
@@ -167,13 +168,18 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 return;
             }
 
-            PhoneScanBridgeHub.EnsureStarted();
             PhoneScanBridgeHub.CodeReceived += Server_CodeReceived;
 
-            string url = BuildClientUrl(PhoneScanBridgeHub.Url);
+            string url = BuildClientUrl(baseUrl);
             txtUrl.Text = url;
             picQr.Image = BuildQrCode(url);
             lblStatus.Text = "\u0110ang ch\u1edd \u0111i\u1ec7n tho\u1ea1i g\u1eedi m\u00e3 t\u1eeb: " + lanAddress;
+        }
+
+        private static string GetHostFromUrl(string url)
+        {
+            Uri parsedUrl;
+            return Uri.TryCreate(url, UriKind.Absolute, out parsedUrl) ? parsedUrl.Host : string.Empty;
         }
 
         private string BuildClientUrl(string baseUrl)

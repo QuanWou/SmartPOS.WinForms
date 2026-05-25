@@ -192,9 +192,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlCategoryTabs = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 50,
+                Height = 76,
                 BackColor = SurfaceColor,
-                Padding = new Padding(12, 8, 12, 8),
+                Padding = new Padding(12, 10, 12, 8),
                 BorderStyle = BorderStyle.None
             };
             pnlCategoryTabs.Paint += (s, e) =>
@@ -212,7 +212,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoScroll = true,
                 WrapContents = false,
                 BackColor = SurfaceColor,
-                Padding = new Padding(0)
+                Padding = new Padding(0, 2, 0, 2)
             };
             pnlCategoryTabs.Controls.Add(flpCategoryTabs);
 
@@ -309,7 +309,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlRight = new Panel
             {
                 Dock = DockStyle.Right,
-                Width = 360,
+                Width = 400,
                 BackColor = PageColor,
                 Padding = new Padding(8, 15, 15, 15)
             };
@@ -424,9 +424,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlCartFooter = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 310,
+                Height = 260,
                 BackColor = SurfaceColor,
-                Padding = new Padding(12, 10, 12, 12)
+                Padding = new Padding(12, 8, 12, 12)
             };
 
             Label lblCustomerSection = new Label
@@ -444,8 +444,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
                 ForeColor = PrimaryDark,
                 AutoSize = false,
+                AutoEllipsis = true,
                 Size = new Size(160, 22),
-                Location = new Point(12, 28)
+                Location = new Point(12, 24)
             };
 
             btnSelectCustomer = new Button
@@ -478,8 +479,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = false,
+                AutoEllipsis = true,
                 Size = new Size(150, 18),
-                Location = new Point(12, 48)
+                Location = new Point(92, 8)
             };
 
             lblOffer = new Label
@@ -488,13 +490,13 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 68)
+                Location = new Point(12, 56)
             };
 
             cboCustomerOffer = new ComboBox
             {
-                Location = new Point(70, 64),
-                Size = new Size(260, 24),
+                Location = new Point(62, 52),
+                Size = new Size(150, 24),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Font = new Font("Segoe UI", 8.5F),
                 Enabled = false
@@ -507,13 +509,13 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 96)
+                Location = new Point(230, 56)
             };
 
             nudRedeemPoints = new NumericUpDown
             {
-                Location = new Point(70, 92),
-                Size = new Size(70, 22),
+                Location = new Point(292, 52),
+                Size = new Size(72, 22),
                 Minimum = 0,
                 Maximum = 0,
                 ThousandsSeparator = true,
@@ -528,7 +530,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 120)
+                Location = new Point(12, 96)
             };
 
             lblTamTinhValue = new Label
@@ -539,7 +541,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
                 Size = new Size(140, 18),
-                Location = new Point(190, 120)
+                Location = new Point(190, 96)
             };
 
             Label lblGiamGiaUuDaiLabel = new Label
@@ -548,7 +550,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 140)
+                Location = new Point(12, 116)
             };
 
             lblGiamGiaUuDaiValue = new Label
@@ -559,7 +561,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
                 Size = new Size(140, 18),
-                Location = new Point(190, 140)
+                Location = new Point(190, 116)
             };
 
             Label lblGiamGiaDiemLabel = new Label
@@ -568,7 +570,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 160)
+                Location = new Point(12, 136)
             };
 
             lblGiamGiaDiemValue = new Label
@@ -579,7 +581,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
                 Size = new Size(140, 18),
-                Location = new Point(190, 160)
+                Location = new Point(190, 136)
             };
 
             lblTongTien = new Label
@@ -588,7 +590,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 9F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 184)
+                Location = new Point(12, 158)
             };
 
             lblTongTienValue = new Label
@@ -598,8 +600,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 ForeColor = PrimaryDark,
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
-                Size = new Size(318, 34),
-                Location = new Point(12, 200)
+                Size = new Size(318, 32),
+                Location = new Point(12, 174)
             };
 
             btnThanhToan = new Button
@@ -688,46 +690,69 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             if (btnClearCustomer != null && btnSelectCustomer != null)
             {
-                btnClearCustomer.Location = new Point(right - btnClearCustomer.Width, 28);
-                btnSelectCustomer.Location = new Point(btnClearCustomer.Left - btnSelectCustomer.Width - 6, 28);
+                btnClearCustomer.Location = new Point(right - btnClearCustomer.Width, 22);
+                btnSelectCustomer.Location = new Point(btnClearCustomer.Left - btnSelectCustomer.Width - 6, 22);
             }
 
             if (lblCustomerDisplayName != null)
             {
                 int nameRight = btnSelectCustomer != null ? btnSelectCustomer.Left - 8 : right;
-                lblCustomerDisplayName.Size = new Size(Math.Max(100, nameRight - left), 22);
+                lblCustomerDisplayName.SetBounds(left, 24, Math.Max(100, nameRight - left), 22);
             }
 
             if (lblCustomerPoints != null)
             {
-                lblCustomerPoints.Size = new Size(Math.Max(120, right - left), 18);
+                lblCustomerPoints.SetBounds(left + 78, 8, Math.Max(90, right - left - 78), 18);
+            }
+
+            int redeemBoxWidth = 72;
+            int redeemLabelWidth = 60;
+            int redeemBoxLeft = right - redeemBoxWidth;
+            int redeemLabelLeft = redeemBoxLeft - redeemLabelWidth - 6;
+            int offerLabelWidth = 48;
+            int offerComboLeft = left + offerLabelWidth + 2;
+            int offerComboWidth = Math.Max(110, redeemLabelLeft - offerComboLeft - 10);
+
+            if (lblOffer != null)
+            {
+                lblOffer.Location = new Point(left, 56);
             }
 
             if (cboCustomerOffer != null)
             {
-                cboCustomerOffer.Size = new Size(Math.Max(120, right - left - 58), 24);
+                cboCustomerOffer.SetBounds(offerComboLeft, 52, offerComboWidth, 24);
+            }
+
+            if (lblRedeemPoints != null)
+            {
+                lblRedeemPoints.SetBounds(redeemLabelLeft, 56, redeemLabelWidth, 18);
+            }
+
+            if (nudRedeemPoints != null)
+            {
+                nudRedeemPoints.SetBounds(redeemBoxLeft, 52, redeemBoxWidth, 22);
             }
 
             int valueWidth = Math.Min(170, Math.Max(120, right - left - 110));
             int valueLeft = right - valueWidth;
             if (lblTamTinhValue != null)
             {
-                lblTamTinhValue.SetBounds(valueLeft, 120, valueWidth, 18);
+                lblTamTinhValue.SetBounds(valueLeft, 96, valueWidth, 18);
             }
 
             if (lblGiamGiaUuDaiValue != null)
             {
-                lblGiamGiaUuDaiValue.SetBounds(valueLeft, 140, valueWidth, 18);
+                lblGiamGiaUuDaiValue.SetBounds(valueLeft, 116, valueWidth, 18);
             }
 
             if (lblGiamGiaDiemValue != null)
             {
-                lblGiamGiaDiemValue.SetBounds(valueLeft, 160, valueWidth, 18);
+                lblGiamGiaDiemValue.SetBounds(valueLeft, 136, valueWidth, 18);
             }
 
             if (lblTongTienValue != null)
             {
-                lblTongTienValue.SetBounds(left, 200, right - left, 34);
+                lblTongTienValue.SetBounds(left, 174, right - left, 32);
             }
 
             if (btnThanhToan != null)
@@ -740,10 +765,10 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         {
             if (flpCartItems == null || flpCartItems.ClientSize.Width <= 0)
             {
-                return 305;
+                return 345;
             }
 
-            return Math.Max(280, flpCartItems.ClientSize.Width - flpCartItems.Padding.Horizontal - 2);
+            return Math.Max(320, flpCartItems.ClientSize.Width - flpCartItems.Padding.Horizontal - 2);
         }
 
         private static void SetTextBoxCueBanner(TextBox textBox, string cueBanner)
@@ -809,17 +834,21 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 Text = text,
                 AutoSize = true,
-                Height = 34,
-                MinimumSize = new Size(70, 34),
-                BackColor = isActive ? TabActiveColor : SurfaceColor,
-                ForeColor = isActive ? Color.White : TabInactiveColor,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Height = 36,
+                MinimumSize = new Size(78, 36),
+                Padding = new Padding(14, 0, 14, 0),
+                BackColor = isActive ? TabActiveColor : FieldColor,
+                ForeColor = isActive ? Color.White : PrimaryDark,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-                Margin = new Padding(4, 0, 4, 0),
+                Margin = new Padding(4, 2, 4, 8),
                 Cursor = Cursors.Hand,
                 Tag = categoryId
             };
-            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.BorderSize = isActive ? 0 : 1;
+            button.FlatAppearance.BorderColor = BorderColor;
             button.Click += (s, e) =>
             {
                 _selectedCategoryId = categoryId;
@@ -835,8 +864,10 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 int categoryId = (int)button.Tag;
                 bool isActive = categoryId == _selectedCategoryId;
-                button.BackColor = isActive ? TabActiveColor : SurfaceColor;
-                button.ForeColor = isActive ? Color.White : TabInactiveColor;
+                button.BackColor = isActive ? TabActiveColor : FieldColor;
+                button.ForeColor = isActive ? Color.White : PrimaryDark;
+                button.FlatAppearance.BorderSize = isActive ? 0 : 1;
+                button.FlatAppearance.BorderColor = BorderColor;
             }
         }
 
@@ -1096,8 +1127,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
             Panel card = new Panel
             {
-                Size = new Size(cardWidth, 85),
-                Margin = new Padding(0, 0, 0, 8),
+                Size = new Size(cardWidth, 90),
+                Margin = new Padding(0, 0, 0, 10),
                 BackColor = CartCardColor,
                 BorderStyle = BorderStyle.None
             };
@@ -1116,6 +1147,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
                 ForeColor = TextMain,
                 AutoSize = false,
+                AutoEllipsis = true,
                 Size = new Size(Math.Max(140, cardWidth - 58), 20),
                 Location = new Point(12, 10)
             };
@@ -1147,7 +1179,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             Panel qtyWrap = new Panel
             {
                 Size = new Size(90, 28),
-                Location = new Point(12, 50),
+                Location = new Point(12, 54),
                 BackColor = QtyBg,
                 BorderStyle = BorderStyle.None
             };
@@ -1219,8 +1251,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 ForeColor = PrimaryDark,
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
-                Size = new Size(Math.Max(120, cardWidth - 120), 22),
-                Location = new Point(108, 54)
+                Size = new Size(Math.Max(130, cardWidth - 128), 22),
+                Location = new Point(116, 57)
             };
 
             card.Controls.Add(lblTen);
