@@ -45,6 +45,7 @@
     <Compile Include="Entities\CategoryDTO.cs" />
     <Compile Include="Entities\ChatSessionMessageDTO.cs" />
     <Compile Include="Entities\CustomerDTO.cs" />
+    <Compile Include="Entities\CustomerOfferDTO.cs" />
     <Compile Include="Entities\CustomerPointTransactionDTO.cs" />
     <Compile Include="Entities\InvoiceDetailDTO.cs" />
     <Compile Include="Entities\InvoiceDTO.cs" />
@@ -64,6 +65,7 @@
     <Compile Include="Responses\ChatBotMetricResponse.cs" />
     <Compile Include="Responses\ChatBotProductInsightResponse.cs" />
     <Compile Include="Responses\ChatBotResponse.cs" />
+    <Compile Include="Responses\CheckoutPreviewResponse.cs" />
     <Compile Include="Responses\DashboardSummaryResponse.cs" />
     <Compile Include="Responses\CustomerCategoryTrendResponse.cs" />
     <Compile Include="Responses\CustomerPurchaseHistoryResponse.cs" />

@@ -13,6 +13,8 @@ namespace SmartPOS.WinForms.BLL.Interfaces
 
         IEnumerable<InvoiceDetailDTO> GetDetailsByInvoiceId(int maHD);
 
+        CheckoutPreviewResponse PreviewCheckout(CheckoutRequest request);
+
         OperationResult Checkout(CheckoutRequest request);
 
         OperationResult UpdateStatus(int maHD, string trangThai);

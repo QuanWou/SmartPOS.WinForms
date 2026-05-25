@@ -58,6 +58,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   final List<CartItem> _cartItems = [];
   Uri? _bridgeBaseUri;
   PosCustomer? _selectedCustomer;
+  List<CustomerOffer> _customerOffers = [];
+  CustomerOffer? _selectedOffer;
+  int _redeemPoints = 0;
   ScannerMode _scanMode = ScannerMode.sale;
   String _status = 'Quét QR kết nối từ SmartPOS WinForms.';
   String? _lastCode;
@@ -69,6 +72,21 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   bool get _isConnected => _bridgeBaseUri != null;
   bool get _isSendCodeMode => _scanMode == ScannerMode.sendCode;
   double get _total => _cartItems.fold(0, (sum, item) => sum + item.lineTotal);
+  double get _offerDiscount => _selectedOffer == null
+      ? 0
+      : (_total * _selectedOffer!.percent / 100).roundToDouble();
+  double get _totalAfterOffer => math.max(0.0, _total - _offerDiscount);
+  int get _maxRedeemPoints {
+    final customer = _selectedCustomer;
+    if (customer == null || _totalAfterOffer <= 0) {
+      return 0;
+    }
+
+    return math.min(customer.points, (_totalAfterOffer / 100).floor());
+  }
+
+  double get _pointDiscount => math.min(_redeemPoints * 100, _totalAfterOffer).toDouble();
+  double get _payableTotal => math.max(0.0, _totalAfterOffer - _pointDiscount);
 
   @override
   void dispose() {
@@ -159,6 +177,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         if (_isSendCodeMode) {
           _cartItems.clear();
           _selectedCustomer = null;
+          _customerOffers.clear();
+          _selectedOffer = null;
+          _redeemPoints = 0;
         }
 
         final modeText = _isSendCodeMode
@@ -596,6 +617,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         _cartItems.insert(0, CartItem(product: product));
       }
 
+      _clampCheckoutAdjustments();
       _status = 'Đã thêm ${product.name}.';
     });
   }
@@ -617,6 +639,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
           quantity: math.min(nextQuantity, item.product.stock),
         );
       }
+      _clampCheckoutAdjustments();
     });
   }
 
@@ -649,6 +672,63 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         .toList();
   }
 
+  Future<void> _loadCustomerOffers(int customerId) async {
+    try {
+      final data = await _getJson(
+        _endpoint('/api/customer-offers', {'customerId': '$customerId'}),
+      );
+      final rawOffers = data['offers'] as List<dynamic>? ?? const [];
+      final offers = rawOffers
+          .map((raw) => CustomerOffer.fromJson(raw as Map<String, dynamic>))
+          .toList();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customerOffers = offers;
+        _selectedOffer = null;
+        _redeemPoints = 0;
+        _clampCheckoutAdjustments();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customerOffers = [];
+        _selectedOffer = null;
+        _redeemPoints = 0;
+        _status = 'Khong tai duoc uu dai khach hang: $error';
+      });
+    }
+  }
+
+  void _clampCheckoutAdjustments() {
+    if (_selectedCustomer == null) {
+      _customerOffers = [];
+      _selectedOffer = null;
+      _redeemPoints = 0;
+      return;
+    }
+
+    if (_selectedOffer != null &&
+        !_customerOffers.any((offer) => offer.id == _selectedOffer!.id)) {
+      _selectedOffer = null;
+    }
+
+    final maxPoints = _maxRedeemPoints;
+    if (_redeemPoints > maxPoints) {
+      _redeemPoints = maxPoints;
+    }
+
+    if (_redeemPoints < 0) {
+      _redeemPoints = 0;
+    }
+  }
+
   Future<void> _showCustomerPicker() async {
     if (!_isConnected || _isBusy) {
       return;
@@ -671,6 +751,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     if (selected == _guestCustomerSelection) {
       setState(() {
         _selectedCustomer = null;
+        _customerOffers = [];
+        _selectedOffer = null;
+        _redeemPoints = 0;
         _status = 'Đã chọn khách lẻ.';
       });
       return;
@@ -682,8 +765,12 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
     setState(() {
       _selectedCustomer = selected;
+      _customerOffers = [];
+      _selectedOffer = null;
+      _redeemPoints = 0;
       _status = 'Đã chọn khách ${selected.name}.';
     });
+    await _loadCustomerOffers(selected.id);
   }
 
   Future<void> _showPayment() async {
@@ -697,8 +784,44 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     });
 
     try {
+      final preview = await _previewCheckout();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _redeemPoints = preview.maxRedeemPoints < _redeemPoints
+            ? preview.maxRedeemPoints
+            : _redeemPoints;
+      });
+
+      if (preview.total <= 0) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Hoa don 0 dong'),
+            content: const Text('Uu dai va diem da tru het tien. Tao hoa don ngay?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Huy'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Tao hoa don'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed == true) {
+          await _completeCheckout(paymentMethod: 'Uu dai va doi diem');
+        }
+        return;
+      }
+
       final data = await _getJson(
-        _endpoint('/api/payment', {'amount': _total.toStringAsFixed(0)}),
+        _endpoint('/api/payment', {'amount': preview.total.toStringAsFixed(0)}),
       );
       final paymentInfo = PaymentInfo.fromJson(data);
 
@@ -718,10 +841,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
         ),
         builder: (_) => _PaymentSheet(
-          total: _total,
+          total: preview.total,
           paymentInfo: paymentInfo,
           customer: _selectedCustomer,
-          onConfirmPaid: _completeCheckout,
+          onConfirmPaid: () => _completeCheckout(),
         ),
       );
     } catch (error) {
@@ -741,7 +864,33 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     }
   }
 
-  Future<bool> _completeCheckout() async {
+  Map<String, dynamic> _buildCheckoutPayload({String paymentMethod = 'Chuyen khoan'}) {
+    return <String, dynamic>{
+      'CustomerId': _selectedCustomer?.id,
+      'OfferId': _selectedOffer?.id,
+      'RedeemPoints': _redeemPoints,
+      'PaymentMethod': paymentMethod,
+      'Items': _cartItems
+          .map(
+            (item) => <String, dynamic>{
+              'ProductId': item.product.id,
+              'Quantity': item.quantity,
+            },
+          )
+          .toList(),
+    };
+  }
+
+  Future<CheckoutPreview> _previewCheckout() async {
+    final data = await _postJson(
+      _endpoint('/api/checkout/preview'),
+      _buildCheckoutPayload(paymentMethod: 'Preview'),
+    );
+
+    return CheckoutPreview.fromJson(data);
+  }
+
+  Future<bool> _completeCheckout({String paymentMethod = 'Chuyen khoan'}) async {
     if (_cartItems.isEmpty) {
       return false;
     }
@@ -752,18 +901,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     });
 
     try {
-      final payload = <String, dynamic>{
-        'CustomerId': _selectedCustomer?.id,
-        'PaymentMethod': 'Chuyen khoan',
-        'Items': _cartItems
-            .map(
-              (item) => <String, dynamic>{
-                'ProductId': item.product.id,
-                'Quantity': item.quantity,
-              },
-            )
-            .toList(),
-      };
+      final payload = _buildCheckoutPayload(paymentMethod: paymentMethod);
 
       final result = await _postJson(_endpoint('/api/checkout'), payload);
       final invoiceId = result['invoiceId'];
@@ -775,6 +913,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       setState(() {
         _cartItems.clear();
         _selectedCustomer = null;
+        _customerOffers = [];
+        _selectedOffer = null;
+        _redeemPoints = 0;
         _status = 'Đã tạo hóa đơn #$invoiceId trên WinForms.';
       });
       return true;
@@ -803,6 +944,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       _bridgeUrlController.clear();
       _lastCode = null;
       _selectedCustomer = null;
+      _customerOffers = [];
+      _selectedOffer = null;
+      _redeemPoints = 0;
       _cartItems.clear();
       _status = 'Quét QR kết nối từ SmartPOS WinForms.';
     });
@@ -1055,12 +1199,85 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
               const SizedBox(width: 8),
               IconButton.filledTonal(
                 tooltip: 'Bỏ khách hàng',
-                onPressed: () => setState(() => _selectedCustomer = null),
+                onPressed: () => setState(() {
+                  _selectedCustomer = null;
+                  _customerOffers = [];
+                  _selectedOffer = null;
+                  _redeemPoints = 0;
+                }),
                 icon: const Icon(Icons.person_remove),
               ),
             ],
           ],
         ),
+        if (_selectedCustomer != null) ...[
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            initialValue: _selectedOffer?.id ?? 0,
+            decoration: const InputDecoration(
+              labelText: 'Uu dai',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<int>(
+                value: 0,
+                child: Text('Khong dung uu dai'),
+              ),
+              ..._customerOffers.map(
+                (offer) => DropdownMenuItem<int>(
+                  value: offer.id,
+                  child: Text(
+                    '${offer.name} - ${offer.percent.toStringAsFixed(0)}%',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: _customerOffers.isEmpty
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedOffer = value == null || value == 0
+                          ? null
+                          : _customerOffers.firstWhere(
+                              (offer) => offer.id == value,
+                            );
+                      _clampCheckoutAdjustments();
+                    });
+                  },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: math.min(_redeemPoints, _maxRedeemPoints).toDouble(),
+                  min: 0,
+                  max: (_maxRedeemPoints <= 0 ? 1 : _maxRedeemPoints).toDouble(),
+                  divisions: _maxRedeemPoints <= 0 ? 1 : _maxRedeemPoints,
+                  label: '$_redeemPoints diem',
+                  onChanged: _maxRedeemPoints <= 0
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _redeemPoints = value.round();
+                            _clampCheckoutAdjustments();
+                          });
+                        },
+                ),
+              ),
+              SizedBox(
+                width: 98,
+                child: Text(
+                  'Doi $_redeemPoints/$_maxRedeemPoints',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         Row(
           children: [
@@ -1234,18 +1451,26 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                 style: TextStyle(color: Colors.grey.shade600),
               ),
               Text(
-                _formatMoney(_total),
+                _formatMoney(_payableTotal),
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                 ),
               ),
+              if (_offerDiscount > 0 || _pointDiscount > 0)
+                Text(
+                  'Tam tinh ${_formatMoney(_total)} - giam ${_formatMoney(_offerDiscount + _pointDiscount)}',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
             ],
           ),
         ),
         if (_cartItems.isNotEmpty)
           TextButton(
-            onPressed: () => setState(_cartItems.clear),
+            onPressed: () => setState(() {
+              _cartItems.clear();
+              _redeemPoints = 0;
+            }),
             child: const Text('Xóa'),
           ),
         const SizedBox(width: 8),
@@ -1355,6 +1580,55 @@ class PosCustomer {
       phone: json['phone'] as String? ?? '',
       rank: json['rank'] as String? ?? '',
       points: (json['points'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class CustomerOffer {
+  const CustomerOffer({
+    required this.id,
+    required this.name,
+    required this.percent,
+    this.expiresAt,
+  });
+
+  final int id;
+  final String name;
+  final double percent;
+  final String? expiresAt;
+
+  factory CustomerOffer.fromJson(Map<String, dynamic> json) {
+    return CustomerOffer(
+      id: (json['id'] as num).toInt(),
+      name: json['name'] as String? ?? '',
+      percent: (json['percent'] as num?)?.toDouble() ?? 0,
+      expiresAt: json['expiresAt'] as String?,
+    );
+  }
+}
+
+class CheckoutPreview {
+  const CheckoutPreview({
+    required this.subtotal,
+    required this.offerDiscount,
+    required this.pointDiscount,
+    required this.maxRedeemPoints,
+    required this.total,
+  });
+
+  final double subtotal;
+  final double offerDiscount;
+  final double pointDiscount;
+  final int maxRedeemPoints;
+  final double total;
+
+  factory CheckoutPreview.fromJson(Map<String, dynamic> json) {
+    return CheckoutPreview(
+      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
+      offerDiscount: (json['offerDiscount'] as num?)?.toDouble() ?? 0,
+      pointDiscount: (json['pointDiscount'] as num?)?.toDouble() ?? 0,
+      maxRedeemPoints: (json['maxRedeemPoints'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toDouble() ?? 0,
     );
   }
 }

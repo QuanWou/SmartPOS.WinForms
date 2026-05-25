@@ -13,6 +13,8 @@ namespace SmartPOS.WinForms.DTO.Requests
 
         public int? MaKH { get; set; }
 
+        public int? MaUuDai { get; set; }
+
         public int DiemSuDung { get; set; }
 
         public string GhiChu { get; set; }

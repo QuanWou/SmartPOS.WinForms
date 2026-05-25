@@ -31,6 +31,13 @@ namespace SmartPOS.WinForms.DAL.Repositories
                         WHEN i.TrangThai = 'Cancelled' THEN N'Đã hủy'
                         ELSE i.TrangThai
                     END AS TrangThai,
+                    ISNULL(i.TongTienTruocGiam, i.TongTien) AS TongTienTruocGiam,
+                    i.MaUuDai,
+                    o.TenUuDai,
+                    ISNULL(i.PhanTramUuDai, 0) AS PhanTramUuDai,
+                    ISNULL(i.GiamGiaUuDai, 0) AS GiamGiaUuDai,
+                    ISNULL(i.DiemSuDung, 0) AS DiemSuDung,
+                    ISNULL(i.GiamGiaDiem, 0) AS GiamGiaDiem,
                     i.TongTien,
                     d.MaSP,
                     p.TenSP,
@@ -40,6 +47,7 @@ namespace SmartPOS.WinForms.DAL.Repositories
                 FROM Invoices i
                 LEFT JOIN Users u ON i.MaNV = u.MaNV
                 LEFT JOIN Customers c ON i.MaKH = c.MaKH
+                LEFT JOIN CustomerOffers o ON i.MaUuDai = o.MaUuDai
                 LEFT JOIN InvoiceDetails d ON i.MaHD = d.MaHD
                 LEFT JOIN Products p ON d.MaSP = p.MaSP
                 WHERE i.MaHD = @MaHD

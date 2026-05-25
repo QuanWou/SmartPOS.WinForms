@@ -240,12 +240,77 @@ BEGIN
         CONSTRAINT DF_Invoices_GiamGiaDiem DEFAULT 0;
 END;
 
+IF OBJECT_ID('dbo.CustomerOffers', 'U') IS NULL
+   AND OBJECT_ID('dbo.Customers', 'U') IS NOT NULL
+   AND OBJECT_ID('dbo.Invoices', 'U') IS NOT NULL
+BEGIN
+    CREATE TABLE dbo.CustomerOffers
+    (
+        MaUuDai INT IDENTITY(1,1) PRIMARY KEY,
+        MaKH INT NOT NULL,
+        TenUuDai NVARCHAR(150) NOT NULL,
+        PhanTramGiam DECIMAL(5,2) NOT NULL,
+        NgayHetHan DATE NULL,
+        TrangThai BIT NOT NULL CONSTRAINT DF_CustomerOffers_TrangThai DEFAULT 1,
+        DaSuDung BIT NOT NULL CONSTRAINT DF_CustomerOffers_DaSuDung DEFAULT 0,
+        MaHDDaDung INT NULL,
+        NgaySuDung DATETIME NULL,
+        GhiChu NVARCHAR(255) NULL,
+        NgayTao DATETIME NOT NULL CONSTRAINT DF_CustomerOffers_NgayTao DEFAULT GETDATE(),
+        NgayCapNhat DATETIME NULL,
+
+        CONSTRAINT FK_CustomerOffers_Customers FOREIGN KEY (MaKH) REFERENCES dbo.Customers(MaKH),
+        CONSTRAINT FK_CustomerOffers_Invoices_Used FOREIGN KEY (MaHDDaDung) REFERENCES dbo.Invoices(MaHD),
+        CONSTRAINT CK_CustomerOffers_PhanTramGiam CHECK (PhanTramGiam > 0 AND PhanTramGiam <= 100)
+    );
+END;
+
+IF OBJECT_ID('dbo.Invoices', 'U') IS NOT NULL
+   AND COL_LENGTH('dbo.Invoices', 'MaUuDai') IS NULL
+BEGIN
+    ALTER TABLE dbo.Invoices ADD MaUuDai INT NULL;
+END;
+
+IF OBJECT_ID('dbo.Invoices', 'U') IS NOT NULL
+   AND COL_LENGTH('dbo.Invoices', 'PhanTramUuDai') IS NULL
+BEGIN
+    ALTER TABLE dbo.Invoices ADD PhanTramUuDai DECIMAL(5,2) NOT NULL
+        CONSTRAINT DF_Invoices_PhanTramUuDai DEFAULT 0;
+END;
+
+IF OBJECT_ID('dbo.Invoices', 'U') IS NOT NULL
+   AND COL_LENGTH('dbo.Invoices', 'GiamGiaUuDai') IS NULL
+BEGIN
+    ALTER TABLE dbo.Invoices ADD GiamGiaUuDai DECIMAL(18,2) NOT NULL
+        CONSTRAINT DF_Invoices_GiamGiaUuDai DEFAULT 0;
+END;
+
 IF OBJECT_ID('dbo.Invoices', 'U') IS NOT NULL
    AND OBJECT_ID('dbo.Customers', 'U') IS NOT NULL
    AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Invoices_Customers')
 BEGIN
     ALTER TABLE dbo.Invoices
     ADD CONSTRAINT FK_Invoices_Customers FOREIGN KEY (MaKH) REFERENCES dbo.Customers(MaKH);
+END;
+
+IF OBJECT_ID('dbo.Invoices', 'U') IS NOT NULL
+   AND OBJECT_ID('dbo.CustomerOffers', 'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Invoices_CustomerOffers')
+BEGIN
+    ALTER TABLE dbo.Invoices
+    ADD CONSTRAINT FK_Invoices_CustomerOffers FOREIGN KEY (MaUuDai) REFERENCES dbo.CustomerOffers(MaUuDai);
+END;
+
+IF OBJECT_ID('dbo.CustomerOffers', 'U') IS NOT NULL
+   AND NOT EXISTS
+   (
+       SELECT 1 FROM sys.indexes
+       WHERE name = 'IX_CustomerOffers_MaKH_Status'
+         AND object_id = OBJECT_ID('dbo.CustomerOffers')
+   )
+BEGIN
+    CREATE INDEX IX_CustomerOffers_MaKH_Status
+    ON dbo.CustomerOffers(MaKH, TrangThai, DaSuDung, NgayHetHan);
 END;
 
 IF OBJECT_ID('dbo.CustomerPointTransactions', 'U') IS NULL
