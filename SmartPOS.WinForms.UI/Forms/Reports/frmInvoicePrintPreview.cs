@@ -204,6 +204,38 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
             }
 
             builder.AppendLine("--------------------------------------------------");
+            bool hasOfferDiscount = first.GiamGiaUuDai > 0 || first.MaUuDai.HasValue;
+            bool hasPointDiscount = first.GiamGiaDiem > 0 || first.DiemSuDung > 0;
+            decimal subtotal = first.TongTienTruocGiam > 0
+                ? first.TongTienTruocGiam
+                : printData.Sum(x => x.ThanhTien);
+
+            if (hasOfferDiscount || hasPointDiscount)
+            {
+                builder.AppendLine("TẠM TÍNH  : " + subtotal.ToString("N0") + " đ");
+            }
+
+            if (hasOfferDiscount)
+            {
+                string offerLabel = "ƯU ĐÃI";
+                if (!string.IsNullOrWhiteSpace(first.TenUuDai))
+                {
+                    offerLabel += " - " + first.TenUuDai;
+                }
+
+                if (first.PhanTramUuDai > 0)
+                {
+                    offerLabel += " (" + first.PhanTramUuDai.ToString("N0") + "%)";
+                }
+
+                builder.AppendLine(TrimReceiptLabel(offerLabel) + ": -" + first.GiamGiaUuDai.ToString("N0") + " đ");
+            }
+
+            if (hasPointDiscount)
+            {
+                builder.AppendLine("ĐỔI ĐIỂM (" + first.DiemSuDung.ToString("N0") + " điểm): -" + first.GiamGiaDiem.ToString("N0") + " đ");
+            }
+
             builder.AppendLine("TỔNG TIỀN : " + first.TongTien.ToString("N0") + " đ");
             builder.AppendLine("==================================================");
             builder.AppendLine("         Cảm ơn quý khách và hẹn gặp lại!         ");
@@ -217,6 +249,16 @@ namespace SmartPOS.WinForms.UI.Forms.Reports
         private string GetDisplayText(string value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ? fallback : value;
+        }
+
+        private string TrimReceiptLabel(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return value.Length <= 34 ? value : value.Substring(0, 34);
         }
 
         private void InitializePrintDocument()

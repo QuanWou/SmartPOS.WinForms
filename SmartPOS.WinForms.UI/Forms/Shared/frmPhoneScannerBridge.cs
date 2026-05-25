@@ -9,6 +9,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
     public class frmPhoneScannerBridge : Form
     {
         private readonly bool _closeAfterScan;
+        private readonly string _clientMode;
         private bool _scanCompleted;
 
         private Label lblTitle;
@@ -25,13 +26,19 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
         public string ScannedCode { get; private set; }
 
         public frmPhoneScannerBridge(string title, string instruction)
-            : this(title, instruction, true)
+            : this(title, instruction, true, null)
         {
         }
 
         public frmPhoneScannerBridge(string title, string instruction, bool closeAfterScan)
+            : this(title, instruction, closeAfterScan, null)
+        {
+        }
+
+        public frmPhoneScannerBridge(string title, string instruction, bool closeAfterScan, string clientMode)
         {
             _closeAfterScan = closeAfterScan;
+            _clientMode = string.IsNullOrWhiteSpace(clientMode) ? string.Empty : clientMode.Trim();
             InitializeComponent(title, instruction);
         }
 
@@ -163,10 +170,21 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
             PhoneScanBridgeHub.EnsureStarted();
             PhoneScanBridgeHub.CodeReceived += Server_CodeReceived;
 
-            string url = PhoneScanBridgeHub.Url;
+            string url = BuildClientUrl(PhoneScanBridgeHub.Url);
             txtUrl.Text = url;
             picQr.Image = BuildQrCode(url);
             lblStatus.Text = "\u0110ang ch\u1edd \u0111i\u1ec7n tho\u1ea1i g\u1eedi m\u00e3 t\u1eeb: " + lanAddress;
+        }
+
+        private string BuildClientUrl(string baseUrl)
+        {
+            if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(_clientMode))
+            {
+                return baseUrl;
+            }
+
+            string separator = baseUrl.IndexOf("?", StringComparison.Ordinal) >= 0 ? "&" : "?";
+            return baseUrl + separator + "mode=" + Uri.EscapeDataString(_clientMode);
         }
 
         private void FrmPhoneScannerBridge_FormClosing(object sender, FormClosingEventArgs e)

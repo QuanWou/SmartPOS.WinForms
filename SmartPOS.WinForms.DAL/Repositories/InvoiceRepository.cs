@@ -28,6 +28,9 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaNV,
                     MaKH,
                     TongTienTruocGiam,
+                    MaUuDai,
+                    PhanTramUuDai,
+                    GiamGiaUuDai,
                     DiemSuDung,
                     GiamGiaDiem,
                     TongTien,
@@ -48,6 +51,9 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     MaNV,
                     MaKH,
                     TongTienTruocGiam,
+                    MaUuDai,
+                    PhanTramUuDai,
+                    GiamGiaUuDai,
                     DiemSuDung,
                     GiamGiaDiem,
                     TongTien,
@@ -89,6 +95,9 @@ namespace SmartPOS.WinForms.DAL.Repositories
                     }
 
                     CustomerDTO customer = null;
+                    CustomerOfferDTO offer = null;
+                    decimal phanTramUuDai = 0;
+                    decimal giamGiaUuDai = 0;
                     decimal giamGiaDiem = 0;
                     int diemTichLuy = 0;
 
@@ -130,18 +139,84 @@ namespace SmartPOS.WinForms.DAL.Repositories
                             throw new InvalidOperationException("Số điểm đổi vượt quá điểm hiện có của khách hàng.");
                         }
 
-                        giamGiaDiem = request.DiemSuDung * LoyaltyConstants.RedeemValuePerPoint;
-                        if (giamGiaDiem > tongTienTruocGiam)
-                        {
-                            throw new InvalidOperationException("Giá trị điểm đổi không được vượt quá tổng tiền đơn hàng.");
-                        }
                     }
                     else if (request.DiemSuDung > 0)
                     {
                         throw new InvalidOperationException("Vui lòng chọn khách hàng trước khi đổi điểm.");
                     }
 
-                    decimal tongTien = tongTienTruocGiam - giamGiaDiem;
+                    if (request.MaUuDai.HasValue && request.MaUuDai.Value > 0)
+                    {
+                        if (customer == null)
+                        {
+                            throw new InvalidOperationException("Vui lòng chọn khách hàng trước khi dùng ưu đãi.");
+                        }
+
+                        offer = scope.Connection.QueryFirstOrDefault<CustomerOfferDTO>(
+                            @"
+                            SELECT
+                                MaUuDai,
+                                MaKH,
+                                TenUuDai,
+                                PhanTramGiam,
+                                NgayHetHan,
+                                TrangThai,
+                                DaSuDung,
+                                MaHDDaDung,
+                                NgaySuDung,
+                                GhiChu,
+                                NgayTao,
+                                NgayCapNhat
+                            FROM CustomerOffers WITH (UPDLOCK, ROWLOCK)
+                            WHERE MaUuDai = @MaUuDai",
+                            new { MaUuDai = request.MaUuDai.Value },
+                            scope.Transaction);
+
+                        if (offer == null)
+                        {
+                            throw new InvalidOperationException("Ưu đãi không tồn tại.");
+                        }
+
+                        if (offer.MaKH != customer.MaKH)
+                        {
+                            throw new InvalidOperationException("Ưu đãi không thuộc khách hàng đã chọn.");
+                        }
+
+                        if (!offer.TrangThai)
+                        {
+                            throw new InvalidOperationException("Ưu đãi đã bị tắt.");
+                        }
+
+                        if (offer.DaSuDung)
+                        {
+                            throw new InvalidOperationException("Ưu đãi đã được sử dụng.");
+                        }
+
+                        if (offer.NgayHetHan.HasValue && offer.NgayHetHan.Value.Date < DateTime.Today)
+                        {
+                            throw new InvalidOperationException("Ưu đãi đã hết hạn.");
+                        }
+
+                        phanTramUuDai = offer.PhanTramGiam;
+                        giamGiaUuDai = CalculateOfferDiscount(tongTienTruocGiam, phanTramUuDai);
+                    }
+                    else if (request.MaUuDai.HasValue && request.MaUuDai.Value < 0)
+                    {
+                        throw new InvalidOperationException("Ưu đãi không hợp lệ.");
+                    }
+
+                    decimal tongTienSauUuDai = Math.Max(0, tongTienTruocGiam - giamGiaUuDai);
+
+                    if (customer != null)
+                    {
+                        giamGiaDiem = request.DiemSuDung * LoyaltyConstants.RedeemValuePerPoint;
+                        if (giamGiaDiem > tongTienSauUuDai)
+                        {
+                            throw new InvalidOperationException("Giá trị điểm đổi không được vượt quá tổng tiền sau ưu đãi.");
+                        }
+                    }
+
+                    decimal tongTien = tongTienSauUuDai - giamGiaDiem;
                     diemTichLuy = CalculateEarnedPoints(tongTien);
 
                     string sqlInvoice = @"
@@ -151,6 +226,9 @@ namespace SmartPOS.WinForms.DAL.Repositories
                             MaNV,
                             MaKH,
                             TongTienTruocGiam,
+                            MaUuDai,
+                            PhanTramUuDai,
+                            GiamGiaUuDai,
                             DiemSuDung,
                             GiamGiaDiem,
                             TongTien,
@@ -163,6 +241,9 @@ namespace SmartPOS.WinForms.DAL.Repositories
                             @MaNV,
                             @MaKH,
                             @TongTienTruocGiam,
+                            @MaUuDai,
+                            @PhanTramUuDai,
+                            @GiamGiaUuDai,
                             @DiemSuDung,
                             @GiamGiaDiem,
                             @TongTien,
@@ -178,6 +259,9 @@ namespace SmartPOS.WinForms.DAL.Repositories
                             request.MaNV,
                             request.MaKH,
                             TongTienTruocGiam = tongTienTruocGiam,
+                            MaUuDai = offer != null ? (int?)offer.MaUuDai : null,
+                            PhanTramUuDai = phanTramUuDai,
+                            GiamGiaUuDai = giamGiaUuDai,
                             request.DiemSuDung,
                             GiamGiaDiem = giamGiaDiem,
                             TongTien = tongTien,
@@ -361,6 +445,33 @@ namespace SmartPOS.WinForms.DAL.Repositories
                         }
                     }
 
+                    if (offer != null)
+                    {
+                        int offerRowsAffected = scope.Connection.Execute(
+                            @"
+                            UPDATE CustomerOffers
+                            SET
+                                DaSuDung = 1,
+                                MaHDDaDung = @MaHD,
+                                NgaySuDung = GETDATE(),
+                                NgayCapNhat = GETDATE()
+                            WHERE MaUuDai = @MaUuDai
+                              AND TrangThai = 1
+                              AND DaSuDung = 0
+                              AND (NgayHetHan IS NULL OR NgayHetHan >= CAST(GETDATE() AS DATE))",
+                            new
+                            {
+                                MaHD = maHD,
+                                offer.MaUuDai
+                            },
+                            scope.Transaction);
+
+                        if (offerRowsAffected <= 0)
+                        {
+                            throw new InvalidOperationException("Ưu đãi vừa thay đổi. Vui lòng tải lại và thử lại.");
+                        }
+                    }
+
                     if (customer != null)
                     {
                         if (request.DiemSuDung > 0)
@@ -515,6 +626,16 @@ namespace SmartPOS.WinForms.DAL.Repositories
             }
 
             return (int)Math.Floor(amount / LoyaltyConstants.EarnAmountPerPoint);
+        }
+
+        private decimal CalculateOfferDiscount(decimal subtotal, decimal percent)
+        {
+            if (subtotal <= 0 || percent <= 0)
+            {
+                return 0;
+            }
+
+            return Math.Round(subtotal * percent / 100m, 0, MidpointRounding.AwayFromZero);
         }
 
         private string ResolveMemberRank(decimal totalSpend, int purchaseCount)

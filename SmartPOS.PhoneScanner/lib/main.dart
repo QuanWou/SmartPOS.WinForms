@@ -2,12 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 const String _guestCustomerSelection = '__smartpos_guest_customer__';
+
+enum ScannerMode { sale, sendCode }
 
 void main() {
   runApp(const SmartPosPhoneScannerApp());
@@ -55,6 +58,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   final List<CartItem> _cartItems = [];
   Uri? _bridgeBaseUri;
   PosCustomer? _selectedCustomer;
+  List<CustomerOffer> _customerOffers = [];
+  CustomerOffer? _selectedOffer;
+  int _redeemPoints = 0;
+  ScannerMode _scanMode = ScannerMode.sale;
   String _status = 'Quét QR kết nối từ SmartPOS WinForms.';
   String? _lastCode;
   bool _isBusy = false;
@@ -63,7 +70,23 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool get _isConnected => _bridgeBaseUri != null;
+  bool get _isSendCodeMode => _scanMode == ScannerMode.sendCode;
   double get _total => _cartItems.fold(0, (sum, item) => sum + item.lineTotal);
+  double get _offerDiscount => _selectedOffer == null
+      ? 0
+      : (_total * _selectedOffer!.percent / 100).roundToDouble();
+  double get _totalAfterOffer => math.max(0.0, _total - _offerDiscount);
+  int get _maxRedeemPoints {
+    final customer = _selectedCustomer;
+    if (customer == null || _totalAfterOffer <= 0) {
+      return 0;
+    }
+
+    return math.min(customer.points, (_totalAfterOffer / 100).floor());
+  }
+
+  double get _pointDiscount => math.min(_redeemPoints * 100, _totalAfterOffer).toDouble();
+  double get _payableTotal => math.max(0.0, _totalAfterOffer - _pointDiscount);
 
   @override
   void dispose() {
@@ -91,12 +114,24 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
     _lastScanAt = now;
 
-    if (!_isConnected) {
-      await _connectFromInput(rawValue);
+    final bridgeConnection = _normalizeBridgeConnection(rawValue);
+    if (bridgeConnection != null) {
+      await _connectToBridge(bridgeConnection);
       return;
     }
 
-    await _lookupAndAddProduct(rawValue);
+    if (!_isConnected) {
+      setState(() {
+        _status = 'Quét QR kết nối từ SmartPOS WinForms trước.';
+      });
+      return;
+    }
+
+    if (_isSendCodeMode) {
+      await _sendCodeToBridge(rawValue);
+    } else {
+      await _lookupAndAddProduct(rawValue);
+    }
   }
 
   String? _firstRawValue(BarcodeCapture capture) {
@@ -111,29 +146,47 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   Future<void> _connectFromInput(String input) async {
-    final normalizedUri = _normalizeBridgeUri(input);
-    if (normalizedUri == null) {
+    final connection = _normalizeBridgeConnection(input);
+    if (connection == null) {
       setState(() {
         _status = 'QR này không phải URL bridge của SmartPOS.';
       });
       return;
     }
 
+    await _connectToBridge(connection);
+  }
+
+  Future<void> _connectToBridge(BridgeConnection connection) async {
     setState(() {
       _isBusy = true;
       _status = 'Đang kiểm tra kết nối SmartPOS...';
     });
 
     try {
-      await _getJson(_endpointFrom(normalizedUri, '/api/health'));
+      final healthEndpoint = _endpointFrom(connection.uri, '/api/health');
+      await _getJson(healthEndpoint);
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _bridgeBaseUri = normalizedUri;
-        _bridgeUrlController.text = normalizedUri.toString();
-        _status = 'Đã kết nối ${normalizedUri.host}:${normalizedUri.port}.';
+        _bridgeBaseUri = connection.uri;
+        _scanMode = connection.mode;
+        _bridgeUrlController.text = connection.uri.toString();
+        if (_isSendCodeMode) {
+          _cartItems.clear();
+          _selectedCustomer = null;
+          _customerOffers.clear();
+          _selectedOffer = null;
+          _redeemPoints = 0;
+        }
+
+        final modeText = _isSendCodeMode
+            ? 'Chế độ gửi mã về WinForms.'
+            : 'Chế độ bán hàng trên điện thoại.';
+        _status =
+            'Đã kết nối ${connection.uri.host}:${connection.uri.port}. $modeText';
       });
       await HapticFeedback.mediumImpact();
     } catch (error) {
@@ -141,9 +194,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         return;
       }
 
+      final healthEndpoint = _endpointFrom(connection.uri, '/api/health');
       setState(() {
         _status =
-            'Không kết nối được SmartPOS. Kiểm tra cùng Wi-Fi và Firewall Windows.';
+            'Không kết nối được ${healthEndpoint.host}:${healthEndpoint.port}. $error';
       });
     } finally {
       if (mounted) {
@@ -154,9 +208,13 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     }
   }
 
-  Uri? _normalizeBridgeUri(String input) {
-    var value = input.trim();
+  BridgeConnection? _normalizeBridgeConnection(String input) {
+    var value = _extractBridgeCandidate(input);
     if (value.isEmpty) {
+      return null;
+    }
+
+    if (!_looksLikeBridgeAddress(value)) {
       return null;
     }
 
@@ -173,12 +231,68 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       return null;
     }
 
-    return Uri(
-      scheme: uri.scheme,
-      host: uri.host,
-      port: uri.hasPort ? uri.port : null,
-      path: '/',
+    final rawMode = uri.queryParameters['mode']?.trim().toLowerCase();
+    final mode = rawMode == 'code' ||
+            rawMode == 'send-code' ||
+            rawMode == 'stock-in' ||
+            rawMode == 'stockin'
+        ? ScannerMode.sendCode
+        : ScannerMode.sale;
+
+    return BridgeConnection(
+      mode: mode,
+      uri: Uri(
+        scheme: uri.scheme,
+        host: uri.host.trim(),
+        port: uri.hasPort ? uri.port : null,
+        path: '/',
+      ),
     );
+  }
+
+  String _extractBridgeCandidate(String input) {
+    var value = input
+        .replaceAll('\u200B', '')
+        .replaceAll('\u200C', '')
+        .replaceAll('\u200D', '')
+        .replaceAll('\uFEFF', '')
+        .trim();
+
+    final urlMatch =
+        RegExp(r'https?://[^\s]+', caseSensitive: false).firstMatch(value);
+    if (urlMatch != null) {
+      return urlMatch.group(0)!.trim().replaceAll(RegExp(r'[),.;]+$'), '');
+    }
+
+    final ipMatch =
+        RegExp(r'\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?\b').firstMatch(value);
+    if (ipMatch != null) {
+      return ipMatch.group(0)!.trim();
+    }
+
+    return value;
+  }
+
+  bool _looksLikeBridgeAddress(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      return true;
+    }
+
+    if (RegExp(r'^\d+$').hasMatch(normalized)) {
+      return false;
+    }
+
+    if (RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?/?(?:\?.*)?$')
+        .hasMatch(normalized)) {
+      return true;
+    }
+
+    return normalized.contains('.') || normalized.contains(':');
   }
 
   Uri _endpoint(String path, [Map<String, String>? queryParameters]) {
@@ -204,11 +318,121 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     );
   }
 
-  Future<Map<String, dynamic>> _getJson(Uri endpoint) async {
-    final request =
-        await _httpClient.getUrl(endpoint).timeout(const Duration(seconds: 5));
-    final response = await request.close().timeout(const Duration(seconds: 8));
+  Future<LocalHttpResponse> _sendLocalHttp(
+    String method,
+    Uri endpoint, {
+    List<int>? bodyBytes,
+    ContentType? contentType,
+  }) async {
+    if (endpoint.scheme == 'http' &&
+        InternetAddress.tryParse(endpoint.host) != null) {
+      return _sendRawIpHttp(
+        method,
+        endpoint,
+        bodyBytes: bodyBytes,
+        contentType: contentType,
+      );
+    }
+
+    final request = await _httpClient
+        .openUrl(method, endpoint)
+        .timeout(const Duration(seconds: 5));
+    if (contentType != null) {
+      request.headers.contentType = contentType;
+    }
+    if (bodyBytes != null) {
+      request.contentLength = bodyBytes.length;
+      request.add(bodyBytes);
+    }
+
+    final response = await request.close().timeout(const Duration(seconds: 10));
     final body = await utf8.decoder.bind(response).join();
+    return LocalHttpResponse(response.statusCode, body);
+  }
+
+  Future<LocalHttpResponse> _sendRawIpHttp(
+    String method,
+    Uri endpoint, {
+    List<int>? bodyBytes,
+    ContentType? contentType,
+  }) async {
+    final address = InternetAddress.tryParse(endpoint.host);
+    if (address == null) {
+      throw const SocketException('Invalid IP address.');
+    }
+
+    final socket = await Socket.connect(
+      address,
+      endpoint.port,
+      timeout: const Duration(seconds: 5),
+    );
+
+    final path = endpoint.path.isEmpty ? '/' : endpoint.path;
+    final requestTarget = endpoint.hasQuery ? '$path?${endpoint.query}' : path;
+    final hostHeader =
+        endpoint.hasPort ? '${endpoint.host}:${endpoint.port}' : endpoint.host;
+
+    final headers = StringBuffer()
+      ..write('$method $requestTarget HTTP/1.1\r\n')
+      ..write('Host: $hostHeader\r\n')
+      ..write('Connection: close\r\n')
+      ..write('Accept: application/json,text/plain,*/*\r\n');
+
+    if (contentType != null) {
+      headers.write('Content-Type: ${contentType.toString()}\r\n');
+    }
+    if (bodyBytes != null) {
+      headers.write('Content-Length: ${bodyBytes.length}\r\n');
+    }
+
+    headers.write('\r\n');
+    socket.add(ascii.encode(headers.toString()));
+    if (bodyBytes != null) {
+      socket.add(bodyBytes);
+    }
+    await socket.flush();
+
+    final builder = BytesBuilder(copy: false);
+    await socket.listen(builder.add).asFuture<void>().timeout(
+          const Duration(seconds: 10),
+        );
+    socket.destroy();
+
+    final bytes = builder.takeBytes();
+    final headerEnd = _findHttpHeaderEnd(bytes);
+    if (headerEnd < 0) {
+      throw const FormatException('SmartPOS trả response HTTP không hợp lệ.');
+    }
+
+    final headerText = ascii.decode(
+      bytes.sublist(0, headerEnd),
+      allowInvalid: true,
+    );
+    final statusLine = headerText.split('\r\n').first;
+    final parts = statusLine.split(' ');
+    final statusCode = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    final body =
+        utf8.decode(bytes.sublist(headerEnd + 4), allowMalformed: true);
+
+    return LocalHttpResponse(statusCode, body);
+  }
+
+  int _findHttpHeaderEnd(List<int> bytes) {
+    for (var i = 0; i <= bytes.length - 4; i++) {
+      if (bytes[i] == 13 &&
+          bytes[i + 1] == 10 &&
+          bytes[i + 2] == 13 &&
+          bytes[i + 3] == 10) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
+  Future<Map<String, dynamic>> _getJson(Uri endpoint) async {
+    final response = await _sendLocalHttp('GET', endpoint);
+    final body = response.body;
 
     if (body.trim().isEmpty) {
       return <String, dynamic>{};
@@ -226,15 +450,14 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     Uri endpoint,
     Map<String, dynamic> payload,
   ) async {
-    final request =
-        await _httpClient.postUrl(endpoint).timeout(const Duration(seconds: 5));
     final payloadBytes = utf8.encode(jsonEncode(payload));
-    request.headers.contentType = ContentType.json;
-    request.contentLength = payloadBytes.length;
-    request.add(payloadBytes);
-
-    final response = await request.close().timeout(const Duration(seconds: 10));
-    final body = await utf8.decoder.bind(response).join();
+    final response = await _sendLocalHttp(
+      'POST',
+      endpoint,
+      bodyBytes: payloadBytes,
+      contentType: ContentType.json,
+    );
+    final body = response.body;
 
     final decoded = body.trim().isEmpty
         ? <String, dynamic>{}
@@ -246,6 +469,75 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     }
 
     return decoded;
+  }
+
+  Future<String> _postText(Uri endpoint, String value) async {
+    final payloadBytes = utf8.encode(value);
+    final response = await _sendLocalHttp(
+      'POST',
+      endpoint,
+      bodyBytes: payloadBytes,
+      contentType: ContentType('text', 'plain', charset: 'utf-8'),
+    );
+    final body = response.body;
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw SmartPosApiException(
+        body.trim().isEmpty ? 'SmartPOS trả lỗi.' : body.trim(),
+      );
+    }
+
+    return body;
+  }
+
+  Future<void> _sendCodeToBridge(String code) async {
+    final normalizedCode = code.trim();
+    if (normalizedCode.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isBusy = true;
+      _status = 'Đang gửi mã $normalizedCode về WinForms...';
+    });
+
+    try {
+      final message = await _postText(_endpoint('/api/code'), normalizedCode);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _lastCode = normalizedCode;
+        _status = message.trim().isEmpty
+            ? 'Đã gửi mã $normalizedCode về WinForms.'
+            : message.trim();
+      });
+      await HapticFeedback.mediumImpact();
+    } on TimeoutException {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _status =
+            'Hết thời gian chờ SmartPOS. Kiểm tra cùng Wi-Fi và Firewall Windows.';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _status = 'Không gửi được mã về WinForms: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
   }
 
   Future<void> _lookupAndAddProduct(String barcode) async {
@@ -325,6 +617,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         _cartItems.insert(0, CartItem(product: product));
       }
 
+      _clampCheckoutAdjustments();
       _status = 'Đã thêm ${product.name}.';
     });
   }
@@ -346,6 +639,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
           quantity: math.min(nextQuantity, item.product.stock),
         );
       }
+      _clampCheckoutAdjustments();
     });
   }
 
@@ -353,13 +647,19 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     final code = _manualCodeController.text.trim();
     if (code.isEmpty) {
       setState(() {
-        _status = 'Nhập mã trước khi kiểm tra.';
+        _status = _isSendCodeMode
+            ? 'Nhập mã trước khi gửi về WinForms.'
+            : 'Nhập mã trước khi kiểm tra.';
       });
       return;
     }
 
     _manualCodeController.clear();
-    await _lookupAndAddProduct(code);
+    if (_isSendCodeMode) {
+      await _sendCodeToBridge(code);
+    } else {
+      await _lookupAndAddProduct(code);
+    }
   }
 
   Future<List<PosCustomer>> _searchCustomers(String keyword) async {
@@ -370,6 +670,63 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     return rawCustomers
         .map((raw) => PosCustomer.fromJson(raw as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<void> _loadCustomerOffers(int customerId) async {
+    try {
+      final data = await _getJson(
+        _endpoint('/api/customer-offers', {'customerId': '$customerId'}),
+      );
+      final rawOffers = data['offers'] as List<dynamic>? ?? const [];
+      final offers = rawOffers
+          .map((raw) => CustomerOffer.fromJson(raw as Map<String, dynamic>))
+          .toList();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customerOffers = offers;
+        _selectedOffer = null;
+        _redeemPoints = 0;
+        _clampCheckoutAdjustments();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _customerOffers = [];
+        _selectedOffer = null;
+        _redeemPoints = 0;
+        _status = 'Khong tai duoc uu dai khach hang: $error';
+      });
+    }
+  }
+
+  void _clampCheckoutAdjustments() {
+    if (_selectedCustomer == null) {
+      _customerOffers = [];
+      _selectedOffer = null;
+      _redeemPoints = 0;
+      return;
+    }
+
+    if (_selectedOffer != null &&
+        !_customerOffers.any((offer) => offer.id == _selectedOffer!.id)) {
+      _selectedOffer = null;
+    }
+
+    final maxPoints = _maxRedeemPoints;
+    if (_redeemPoints > maxPoints) {
+      _redeemPoints = maxPoints;
+    }
+
+    if (_redeemPoints < 0) {
+      _redeemPoints = 0;
+    }
   }
 
   Future<void> _showCustomerPicker() async {
@@ -394,6 +751,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     if (selected == _guestCustomerSelection) {
       setState(() {
         _selectedCustomer = null;
+        _customerOffers = [];
+        _selectedOffer = null;
+        _redeemPoints = 0;
         _status = 'Đã chọn khách lẻ.';
       });
       return;
@@ -405,8 +765,12 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
     setState(() {
       _selectedCustomer = selected;
+      _customerOffers = [];
+      _selectedOffer = null;
+      _redeemPoints = 0;
       _status = 'Đã chọn khách ${selected.name}.';
     });
+    await _loadCustomerOffers(selected.id);
   }
 
   Future<void> _showPayment() async {
@@ -420,8 +784,44 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     });
 
     try {
+      final preview = await _previewCheckout();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _redeemPoints = preview.maxRedeemPoints < _redeemPoints
+            ? preview.maxRedeemPoints
+            : _redeemPoints;
+      });
+
+      if (preview.total <= 0) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Hoa don 0 dong'),
+            content: const Text('Uu dai va diem da tru het tien. Tao hoa don ngay?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Huy'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Tao hoa don'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed == true) {
+          await _completeCheckout(paymentMethod: 'Uu dai va doi diem');
+        }
+        return;
+      }
+
       final data = await _getJson(
-        _endpoint('/api/payment', {'amount': _total.toStringAsFixed(0)}),
+        _endpoint('/api/payment', {'amount': preview.total.toStringAsFixed(0)}),
       );
       final paymentInfo = PaymentInfo.fromJson(data);
 
@@ -441,10 +841,10 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
         ),
         builder: (_) => _PaymentSheet(
-          total: _total,
+          total: preview.total,
           paymentInfo: paymentInfo,
           customer: _selectedCustomer,
-          onConfirmPaid: _completeCheckout,
+          onConfirmPaid: () => _completeCheckout(),
         ),
       );
     } catch (error) {
@@ -464,7 +864,33 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     }
   }
 
-  Future<bool> _completeCheckout() async {
+  Map<String, dynamic> _buildCheckoutPayload({String paymentMethod = 'Chuyen khoan'}) {
+    return <String, dynamic>{
+      'CustomerId': _selectedCustomer?.id,
+      'OfferId': _selectedOffer?.id,
+      'RedeemPoints': _redeemPoints,
+      'PaymentMethod': paymentMethod,
+      'Items': _cartItems
+          .map(
+            (item) => <String, dynamic>{
+              'ProductId': item.product.id,
+              'Quantity': item.quantity,
+            },
+          )
+          .toList(),
+    };
+  }
+
+  Future<CheckoutPreview> _previewCheckout() async {
+    final data = await _postJson(
+      _endpoint('/api/checkout/preview'),
+      _buildCheckoutPayload(paymentMethod: 'Preview'),
+    );
+
+    return CheckoutPreview.fromJson(data);
+  }
+
+  Future<bool> _completeCheckout({String paymentMethod = 'Chuyen khoan'}) async {
     if (_cartItems.isEmpty) {
       return false;
     }
@@ -475,18 +901,7 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     });
 
     try {
-      final payload = <String, dynamic>{
-        'CustomerId': _selectedCustomer?.id,
-        'PaymentMethod': 'Chuyen khoan',
-        'Items': _cartItems
-            .map(
-              (item) => <String, dynamic>{
-                'ProductId': item.product.id,
-                'Quantity': item.quantity,
-              },
-            )
-            .toList(),
-      };
+      final payload = _buildCheckoutPayload(paymentMethod: paymentMethod);
 
       final result = await _postJson(_endpoint('/api/checkout'), payload);
       final invoiceId = result['invoiceId'];
@@ -498,6 +913,9 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       setState(() {
         _cartItems.clear();
         _selectedCustomer = null;
+        _customerOffers = [];
+        _selectedOffer = null;
+        _redeemPoints = 0;
         _status = 'Đã tạo hóa đơn #$invoiceId trên WinForms.';
       });
       return true;
@@ -522,9 +940,13 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   void _disconnect() {
     setState(() {
       _bridgeBaseUri = null;
+      _scanMode = ScannerMode.sale;
       _bridgeUrlController.clear();
       _lastCode = null;
       _selectedCustomer = null;
+      _customerOffers = [];
+      _selectedOffer = null;
+      _redeemPoints = 0;
       _cartItems.clear();
       _status = 'Quét QR kết nối từ SmartPOS WinForms.';
     });
@@ -684,7 +1106,12 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         children: [
           _buildStatusRow(),
           const SizedBox(height: 10),
-          if (!_isConnected) _buildBridgeInput() else _buildCartControls(),
+          if (!_isConnected)
+            _buildBridgeInput()
+          else if (_isSendCodeMode)
+            _buildCodeControls()
+          else
+            _buildCartControls(),
           const SizedBox(height: 10),
           Expanded(child: _buildCartList()),
           const SizedBox(height: 10),
@@ -772,12 +1199,85 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
               const SizedBox(width: 8),
               IconButton.filledTonal(
                 tooltip: 'Bỏ khách hàng',
-                onPressed: () => setState(() => _selectedCustomer = null),
+                onPressed: () => setState(() {
+                  _selectedCustomer = null;
+                  _customerOffers = [];
+                  _selectedOffer = null;
+                  _redeemPoints = 0;
+                }),
                 icon: const Icon(Icons.person_remove),
               ),
             ],
           ],
         ),
+        if (_selectedCustomer != null) ...[
+          const SizedBox(height: 8),
+          DropdownButtonFormField<int>(
+            initialValue: _selectedOffer?.id ?? 0,
+            decoration: const InputDecoration(
+              labelText: 'Uu dai',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<int>(
+                value: 0,
+                child: Text('Khong dung uu dai'),
+              ),
+              ..._customerOffers.map(
+                (offer) => DropdownMenuItem<int>(
+                  value: offer.id,
+                  child: Text(
+                    '${offer.name} - ${offer.percent.toStringAsFixed(0)}%',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+            onChanged: _customerOffers.isEmpty
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedOffer = value == null || value == 0
+                          ? null
+                          : _customerOffers.firstWhere(
+                              (offer) => offer.id == value,
+                            );
+                      _clampCheckoutAdjustments();
+                    });
+                  },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: math.min(_redeemPoints, _maxRedeemPoints).toDouble(),
+                  min: 0,
+                  max: (_maxRedeemPoints <= 0 ? 1 : _maxRedeemPoints).toDouble(),
+                  divisions: _maxRedeemPoints <= 0 ? 1 : _maxRedeemPoints,
+                  label: '$_redeemPoints diem',
+                  onChanged: _maxRedeemPoints <= 0
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _redeemPoints = value.round();
+                            _clampCheckoutAdjustments();
+                          });
+                        },
+                ),
+              ),
+              SizedBox(
+                width: 98,
+                child: Text(
+                  'Doi $_redeemPoints/$_maxRedeemPoints',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         Row(
           children: [
@@ -813,11 +1313,53 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     );
   }
 
+  Widget _buildCodeControls() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _manualCodeController,
+            textInputAction: TextInputAction.send,
+            decoration: InputDecoration(
+              labelText: _lastCode == null
+                  ? 'Nhập mã để gửi WinForms'
+                  : 'Mã gần nhất: $_lastCode',
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            onSubmitted: (_) => _sendManualCode(),
+          ),
+        ),
+        const SizedBox(width: 10),
+        IconButton.filledTonal(
+          tooltip: 'Đổi kết nối',
+          onPressed: _disconnect,
+          icon: const Icon(Icons.logout),
+        ),
+        const SizedBox(width: 8),
+        FilledButton.icon(
+          onPressed: _isBusy ? null : _sendManualCode,
+          icon: const Icon(Icons.send),
+          label: const Text('Gửi'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCartList() {
     if (!_isConnected) {
       return const Center(
         child: Text(
           'Mở WinForms, bấm Quét bằng điện thoại, rồi quét QR để kết nối.',
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    if (_isSendCodeMode) {
+      return const Center(
+        child: Text(
+          'Quét barcode để gửi về màn hình WinForms đang chờ.\nNhập kho sẽ tự xử lý: mã cũ thêm vào phiếu, mã mới mở thêm sản phẩm.',
           textAlign: TextAlign.center,
         ),
       );
@@ -879,6 +1421,24 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
   }
 
   Widget _buildCheckoutBar() {
+    if (_isSendCodeMode) {
+      return Row(
+        children: [
+          Icon(Icons.inventory_2_outlined, color: Colors.grey.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Chế độ nhập kho: gửi mã trực tiếp về WinForms',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(
@@ -891,18 +1451,26 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
                 style: TextStyle(color: Colors.grey.shade600),
               ),
               Text(
-                _formatMoney(_total),
+                _formatMoney(_payableTotal),
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                 ),
               ),
+              if (_offerDiscount > 0 || _pointDiscount > 0)
+                Text(
+                  'Tam tinh ${_formatMoney(_total)} - giam ${_formatMoney(_offerDiscount + _pointDiscount)}',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
             ],
           ),
         ),
         if (_cartItems.isNotEmpty)
           TextButton(
-            onPressed: () => setState(_cartItems.clear),
+            onPressed: () => setState(() {
+              _cartItems.clear();
+              _redeemPoints = 0;
+            }),
             child: const Text('Xóa'),
           ),
         const SizedBox(width: 8),
@@ -914,6 +1482,20 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
       ],
     );
   }
+}
+
+class BridgeConnection {
+  const BridgeConnection({required this.uri, required this.mode});
+
+  final Uri uri;
+  final ScannerMode mode;
+}
+
+class LocalHttpResponse {
+  const LocalHttpResponse(this.statusCode, this.body);
+
+  final int statusCode;
+  final String body;
 }
 
 class PosProduct {
@@ -998,6 +1580,55 @@ class PosCustomer {
       phone: json['phone'] as String? ?? '',
       rank: json['rank'] as String? ?? '',
       points: (json['points'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class CustomerOffer {
+  const CustomerOffer({
+    required this.id,
+    required this.name,
+    required this.percent,
+    this.expiresAt,
+  });
+
+  final int id;
+  final String name;
+  final double percent;
+  final String? expiresAt;
+
+  factory CustomerOffer.fromJson(Map<String, dynamic> json) {
+    return CustomerOffer(
+      id: (json['id'] as num).toInt(),
+      name: json['name'] as String? ?? '',
+      percent: (json['percent'] as num?)?.toDouble() ?? 0,
+      expiresAt: json['expiresAt'] as String?,
+    );
+  }
+}
+
+class CheckoutPreview {
+  const CheckoutPreview({
+    required this.subtotal,
+    required this.offerDiscount,
+    required this.pointDiscount,
+    required this.maxRedeemPoints,
+    required this.total,
+  });
+
+  final double subtotal;
+  final double offerDiscount;
+  final double pointDiscount;
+  final int maxRedeemPoints;
+  final double total;
+
+  factory CheckoutPreview.fromJson(Map<String, dynamic> json) {
+    return CheckoutPreview(
+      subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0,
+      offerDiscount: (json['offerDiscount'] as num?)?.toDouble() ?? 0,
+      pointDiscount: (json['pointDiscount'] as num?)?.toDouble() ?? 0,
+      maxRedeemPoints: (json['maxRedeemPoints'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toDouble() ?? 0,
     );
   }
 }

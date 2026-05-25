@@ -44,6 +44,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private readonly ICategoryService _categoryService;
         private readonly IInvoiceService _invoiceService;
         private readonly ICustomerService _customerService;
+        private readonly ICustomerOfferService _customerOfferService;
 
         private const int ProductCardWidth = 168;
         private const int ProductCardHeight = 118;
@@ -81,9 +82,12 @@ namespace SmartPOS.WinForms.UI.Forms.POS
 
         private Label lblCustomerDisplayName;
         private Label lblCustomerPoints;
+        private Label lblOffer;
+        private ComboBox cboCustomerOffer;
         private Label lblRedeemPoints;
         private NumericUpDown nudRedeemPoints;
         private Label lblTamTinhValue;
+        private Label lblGiamGiaUuDaiValue;
         private Label lblGiamGiaDiemValue;
         private Label lblTongTien;
         private Label lblTongTienValue;
@@ -97,6 +101,8 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private Dictionary<int, int> _categoryOrderById;
         private List<CartItem> _cartItems;
         private CustomerDTO _selectedCustomer;
+        private List<CustomerOfferDTO> _availableOffers;
+        private CustomerOfferDTO _selectedOffer;
         private int _selectedCategoryId = -1;
 
         public frmPOS()
@@ -105,11 +111,13 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             _categoryService = new CategoryService();
             _invoiceService = new InvoiceService();
             _customerService = new CustomerService();
+            _customerOfferService = new CustomerOfferService();
             _products = new List<ProductDTO>();
             _categories = new List<CategoryDTO>();
             _categoryNameById = new Dictionary<int, string>();
             _categoryOrderById = new Dictionary<int, int>();
             _cartItems = new List<CartItem>();
+            _availableOffers = new List<CustomerOfferDTO>();
 
             InitializeComponent();
         }
@@ -137,6 +145,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         {
             PhoneScanBridgeHub.InvoiceCreated += PhoneScanBridgeHub_InvoiceCreated;
             LoadProducts();
+            BindOfferCombo();
             UpdateSelectedCustomerView();
             RefreshCartView();
         }
@@ -415,7 +424,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlCartFooter = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 280,
+                Height = 310,
                 BackColor = SurfaceColor,
                 Padding = new Padding(12, 10, 12, 12)
             };
@@ -473,18 +482,37 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Location = new Point(12, 48)
             };
 
-            lblRedeemPoints = new Label
+            lblOffer = new Label
             {
-                Text = "Đổi điểm",
+                Text = "Ưu đãi",
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
                 Location = new Point(12, 68)
             };
 
-            nudRedeemPoints = new NumericUpDown
+            cboCustomerOffer = new ComboBox
             {
                 Location = new Point(70, 64),
+                Size = new Size(260, 24),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = new Font("Segoe UI", 8.5F),
+                Enabled = false
+            };
+            cboCustomerOffer.SelectedIndexChanged += CboCustomerOffer_SelectedIndexChanged;
+
+            lblRedeemPoints = new Label
+            {
+                Text = "Đổi điểm",
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(12, 96)
+            };
+
+            nudRedeemPoints = new NumericUpDown
+            {
+                Location = new Point(70, 92),
                 Size = new Size(70, 22),
                 Minimum = 0,
                 Maximum = 0,
@@ -500,7 +528,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 90)
+                Location = new Point(12, 120)
             };
 
             lblTamTinhValue = new Label
@@ -511,7 +539,27 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
                 Size = new Size(140, 18),
-                Location = new Point(190, 90)
+                Location = new Point(190, 120)
+            };
+
+            Label lblGiamGiaUuDaiLabel = new Label
+            {
+                Text = "Giảm ưu đãi",
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = TextSoft,
+                AutoSize = true,
+                Location = new Point(12, 140)
+            };
+
+            lblGiamGiaUuDaiValue = new Label
+            {
+                Text = "0 đ",
+                Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(70, 160, 100),
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleRight,
+                Size = new Size(140, 18),
+                Location = new Point(190, 140)
             };
 
             Label lblGiamGiaDiemLabel = new Label
@@ -520,7 +568,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 110)
+                Location = new Point(12, 160)
             };
 
             lblGiamGiaDiemValue = new Label
@@ -531,7 +579,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
                 Size = new Size(140, 18),
-                Location = new Point(190, 110)
+                Location = new Point(190, 160)
             };
 
             lblTongTien = new Label
@@ -540,7 +588,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 Font = new Font("Segoe UI", 9F),
                 ForeColor = TextSoft,
                 AutoSize = true,
-                Location = new Point(12, 132)
+                Location = new Point(12, 184)
             };
 
             lblTongTienValue = new Label
@@ -551,7 +599,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
                 Size = new Size(318, 34),
-                Location = new Point(12, 148)
+                Location = new Point(12, 200)
             };
 
             btnThanhToan = new Button
@@ -571,10 +619,14 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             pnlCartFooter.Controls.Add(btnSelectCustomer);
             pnlCartFooter.Controls.Add(btnClearCustomer);
             pnlCartFooter.Controls.Add(lblCustomerPoints);
+            pnlCartFooter.Controls.Add(lblOffer);
+            pnlCartFooter.Controls.Add(cboCustomerOffer);
             pnlCartFooter.Controls.Add(lblRedeemPoints);
             pnlCartFooter.Controls.Add(nudRedeemPoints);
             pnlCartFooter.Controls.Add(lblTamTinhLabel);
             pnlCartFooter.Controls.Add(lblTamTinhValue);
+            pnlCartFooter.Controls.Add(lblGiamGiaUuDaiLabel);
+            pnlCartFooter.Controls.Add(lblGiamGiaUuDaiValue);
             pnlCartFooter.Controls.Add(lblGiamGiaDiemLabel);
             pnlCartFooter.Controls.Add(lblGiamGiaDiemValue);
             pnlCartFooter.Controls.Add(lblTongTien);
@@ -651,21 +703,31 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 lblCustomerPoints.Size = new Size(Math.Max(120, right - left), 18);
             }
 
+            if (cboCustomerOffer != null)
+            {
+                cboCustomerOffer.Size = new Size(Math.Max(120, right - left - 58), 24);
+            }
+
             int valueWidth = Math.Min(170, Math.Max(120, right - left - 110));
             int valueLeft = right - valueWidth;
             if (lblTamTinhValue != null)
             {
-                lblTamTinhValue.SetBounds(valueLeft, 90, valueWidth, 18);
+                lblTamTinhValue.SetBounds(valueLeft, 120, valueWidth, 18);
+            }
+
+            if (lblGiamGiaUuDaiValue != null)
+            {
+                lblGiamGiaUuDaiValue.SetBounds(valueLeft, 140, valueWidth, 18);
             }
 
             if (lblGiamGiaDiemValue != null)
             {
-                lblGiamGiaDiemValue.SetBounds(valueLeft, 110, valueWidth, 18);
+                lblGiamGiaDiemValue.SetBounds(valueLeft, 160, valueWidth, 18);
             }
 
             if (lblTongTienValue != null)
             {
-                lblTongTienValue.SetBounds(left, 148, right - left, 34);
+                lblTongTienValue.SetBounds(left, 200, right - left, 34);
             }
 
             if (btnThanhToan != null)
@@ -935,7 +997,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private void RefreshCartSummary()
         {
             decimal tamTinh = GetCartSubtotal();
-            int maxRedeemPoints = GetMaxRedeemPoints(tamTinh);
+            decimal offerDiscount = GetOfferDiscount(tamTinh);
+            decimal totalAfterOffer = Math.Max(0, tamTinh - offerDiscount);
+            int maxRedeemPoints = GetMaxRedeemPoints(totalAfterOffer);
 
             if (nudRedeemPoints != null)
             {
@@ -952,15 +1016,29 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 nudRedeemPoints.Enabled = _selectedCustomer != null && maxRedeemPoints > 0;
             }
 
-            decimal discount = GetPointDiscount();
-            decimal payable = Math.Max(0, tamTinh - discount);
+            decimal pointDiscount = GetPointDiscount();
+            decimal payable = Math.Max(0, totalAfterOffer - pointDiscount);
 
             lblTamTinhValue.Text = tamTinh.ToString("N0") + " đ";
-            lblGiamGiaDiemValue.Text = discount.ToString("N0") + " đ";
+            if (lblGiamGiaUuDaiValue != null)
+            {
+                lblGiamGiaUuDaiValue.Text = offerDiscount.ToString("N0") + " đ";
+            }
+            lblGiamGiaDiemValue.Text = pointDiscount.ToString("N0") + " đ";
             lblTongTienValue.Text = payable.ToString("N0") + " đ";
         }
 
         private decimal GetCartSubtotal() => _cartItems.Sum(x => x.SoLuong * x.DonGia);
+
+        private decimal GetOfferDiscount(decimal subtotal)
+        {
+            if (_selectedOffer == null || subtotal <= 0)
+            {
+                return 0;
+            }
+
+            return Math.Round(subtotal * _selectedOffer.PhanTramGiam / 100m, 0, MidpointRounding.AwayFromZero);
+        }
 
         private decimal GetPointDiscount()
         {
@@ -968,12 +1046,17 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             return _customerService.CalculateRedeemValue((int)nudRedeemPoints.Value);
         }
 
-        private decimal GetPayableTotal() => Math.Max(0, GetCartSubtotal() - GetPointDiscount());
-
-        private int GetMaxRedeemPoints(decimal subtotal)
+        private decimal GetPayableTotal()
         {
-            if (_selectedCustomer == null || subtotal <= 0) return 0;
-            int maxByOrder = (int)Math.Floor(subtotal / LoyaltyConstants.RedeemValuePerPoint);
+            decimal subtotal = GetCartSubtotal();
+            decimal afterOffer = Math.Max(0, subtotal - GetOfferDiscount(subtotal));
+            return Math.Max(0, afterOffer - GetPointDiscount());
+        }
+
+        private int GetMaxRedeemPoints(decimal amountAfterOffer)
+        {
+            if (_selectedCustomer == null || amountAfterOffer <= 0) return 0;
+            int maxByOrder = (int)Math.Floor(amountAfterOffer / LoyaltyConstants.RedeemValuePerPoint);
             return Math.Max(0, Math.Min(_selectedCustomer.DiemHienCo, maxByOrder));
         }
 
@@ -1358,6 +1441,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 if (frm.ShowDialog(this) == DialogResult.OK && frm.SelectedCustomer != null)
                 {
                     _selectedCustomer = frm.SelectedCustomer;
+                    LoadAvailableOffersForSelectedCustomer();
                     UpdateSelectedCustomerView();
                     RefreshCartSummary();
                 }
@@ -1367,6 +1451,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         private void BtnClearCustomer_Click(object sender, EventArgs e)
         {
             _selectedCustomer = null;
+            _selectedOffer = null;
+            _availableOffers.Clear();
+            BindOfferCombo();
             if (nudRedeemPoints != null) nudRedeemPoints.Value = 0;
             UpdateSelectedCustomerView();
             RefreshCartSummary();
@@ -1379,6 +1466,50 @@ namespace SmartPOS.WinForms.UI.Forms.POS
                 ? "Điểm: " + _selectedCustomer.DiemHienCo.ToString("N0") + " | " + _selectedCustomer.HangThanhVien
                 : "Điểm: 0";
             btnClearCustomer.Enabled = _selectedCustomer != null;
+        }
+
+        private void LoadAvailableOffersForSelectedCustomer()
+        {
+            _selectedOffer = null;
+            _availableOffers.Clear();
+
+            if (_selectedCustomer != null)
+            {
+                _availableOffers = (_customerOfferService.GetAvailableByCustomerId(_selectedCustomer.MaKH) ?? new List<CustomerOfferDTO>())
+                    .OrderByDescending(x => x.PhanTramGiam)
+                    .ThenBy(x => x.NgayHetHan ?? DateTime.MaxValue)
+                    .ToList();
+            }
+
+            BindOfferCombo();
+        }
+
+        private void BindOfferCombo()
+        {
+            if (cboCustomerOffer == null)
+            {
+                return;
+            }
+
+            cboCustomerOffer.SelectedIndexChanged -= CboCustomerOffer_SelectedIndexChanged;
+            cboCustomerOffer.Items.Clear();
+            cboCustomerOffer.Items.Add(new OfferComboItem(null));
+
+            foreach (CustomerOfferDTO offer in _availableOffers)
+            {
+                cboCustomerOffer.Items.Add(new OfferComboItem(offer));
+            }
+
+            cboCustomerOffer.SelectedIndex = 0;
+            cboCustomerOffer.Enabled = _selectedCustomer != null && _availableOffers.Count > 0;
+            cboCustomerOffer.SelectedIndexChanged += CboCustomerOffer_SelectedIndexChanged;
+        }
+
+        private void CboCustomerOffer_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            OfferComboItem item = cboCustomerOffer.SelectedItem as OfferComboItem;
+            _selectedOffer = item != null ? item.Offer : null;
+            RefreshCartSummary();
         }
 
         private void BtnThanhToan_Click(object sender, EventArgs e)
@@ -1401,7 +1532,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             OperationResult pointValidation = _customerService.ValidatePointRedemption(
                 _selectedCustomer != null ? (int?)_selectedCustomer.MaKH : null,
                 diemSuDung,
-                GetCartSubtotal());
+                Math.Max(0, GetCartSubtotal() - GetOfferDiscount(GetCartSubtotal())));
 
             if (!pointValidation.IsSuccess)
             {
@@ -1427,6 +1558,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 MaNV = SessionManager.CurrentUser.MaNV,
                 MaKH = _selectedCustomer != null ? (int?)_selectedCustomer.MaKH : null,
+                MaUuDai = _selectedOffer != null ? (int?)_selectedOffer.MaUuDai : null,
                 DiemSuDung = diemSuDung,
                 GhiChu = "Bán tại quầy - " + paymentMethodLabel,
                 ChiTietHoaDon = _cartItems.Select(x => new InvoiceDetailDTO
@@ -1447,6 +1579,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             {
                 _cartItems.Clear();
                 _selectedCustomer = null;
+                _selectedOffer = null;
+                _availableOffers.Clear();
+                BindOfferCombo();
                 if (nudRedeemPoints != null) nudRedeemPoints.Value = 0;
                 UpdateSelectedCustomerView();
                 RefreshCartView();
@@ -1474,6 +1609,26 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             using (Pen pen = new Pen(BorderColor))
             {
                 e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+            }
+        }
+
+        private class OfferComboItem
+        {
+            public OfferComboItem(CustomerOfferDTO offer)
+            {
+                Offer = offer;
+            }
+
+            public CustomerOfferDTO Offer { get; }
+
+            public override string ToString()
+            {
+                if (Offer == null)
+                {
+                    return "Không áp dụng";
+                }
+
+                return Offer.TenUuDai + " - " + Offer.PhanTramGiam.ToString("N0") + "%";
             }
         }
 

@@ -33,7 +33,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         private const string TransferBankCode = "TechCombank";
         private const string TransferBankName = "TechCombank";
-        private const string TransferAccountNumber = "2005111818";
+        private const string TransferAccountNumber = "19072952746016";
         private const string TransferAccountName = "NHA HANG SMARTPOS";
         private const string TransferContent = "Thanh toan hoa don POS";
         private const string TransferTemplate = "compact2";
@@ -411,6 +411,18 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 return;
             }
 
+            if (method == "GET" && routePath == "/api/customer-offers")
+            {
+                WriteCustomerOffersResponse(stream, query["customerId"]);
+                return;
+            }
+
+            if (method == "POST" && routePath == "/api/checkout/preview")
+            {
+                WriteCheckoutPreviewResponse(stream, body);
+                return;
+            }
+
             if (method == "POST" && routePath == "/api/checkout")
             {
                 WriteCheckoutResponse(stream, body);
@@ -565,6 +577,107 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
             }
         }
 
+        private void WriteCustomerOffersResponse(NetworkStream stream, string customerIdValue)
+        {
+            int customerId;
+            if (!int.TryParse(customerIdValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out customerId) || customerId <= 0)
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
+                    "{\"offers\":[],\"message\":\"CustomerId is invalid.\"}");
+                return;
+            }
+
+            try
+            {
+                IEnumerable<CustomerOfferDTO> offers = new CustomerOfferService()
+                    .GetAvailableByCustomerId(customerId);
+
+                StringBuilder jsonBuilder = new StringBuilder();
+                jsonBuilder.Append("{\"offers\":[");
+
+                bool isFirst = true;
+                foreach (CustomerOfferDTO offer in offers)
+                {
+                    if (!isFirst)
+                    {
+                        jsonBuilder.Append(",");
+                    }
+
+                    isFirst = false;
+                    jsonBuilder.Append("{");
+                    jsonBuilder.Append("\"id\":").Append(offer.MaUuDai.ToString(CultureInfo.InvariantCulture)).Append(",");
+                    jsonBuilder.Append("\"name\":\"").Append(JsonEscape(offer.TenUuDai)).Append("\",");
+                    jsonBuilder.Append("\"percent\":").Append(offer.PhanTramGiam.ToString("0.##", CultureInfo.InvariantCulture)).Append(",");
+                    jsonBuilder.Append("\"expiresAt\":");
+                    if (offer.NgayHetHan.HasValue)
+                    {
+                        jsonBuilder.Append("\"").Append(offer.NgayHetHan.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)).Append("\"");
+                    }
+                    else
+                    {
+                        jsonBuilder.Append("null");
+                    }
+
+                    jsonBuilder.Append("}");
+                }
+
+                jsonBuilder.Append("]}");
+                WriteResponse(stream, "200 OK", "application/json; charset=utf-8", jsonBuilder.ToString());
+            }
+            catch (Exception ex)
+            {
+                WriteResponse(stream, "500 Internal Server Error", "application/json; charset=utf-8",
+                    "{\"offers\":[],\"message\":\"" + JsonEscape(ex.Message) + "\"}");
+            }
+        }
+
+        private void WriteCheckoutPreviewResponse(NetworkStream stream, string body)
+        {
+            if (SessionManager.CurrentUser == null)
+            {
+                WriteResponse(stream, "401 Unauthorized", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Chưa có nhân viên đăng nhập SmartPOS.\"}");
+                return;
+            }
+
+            MobileCheckoutRequest mobileRequest;
+            if (!TryReadMobileCheckoutRequest(stream, body, out mobileRequest))
+            {
+                return;
+            }
+
+            if (mobileRequest.Items == null || mobileRequest.Items.Count == 0)
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Hóa đơn từ điện thoại chưa có sản phẩm.\"}");
+                return;
+            }
+
+            CheckoutRequest checkoutRequest = BuildCheckoutRequest(mobileRequest);
+            CheckoutPreviewResponse preview = new InvoiceService().PreviewCheckout(checkoutRequest);
+            if (!preview.IsSuccess)
+            {
+                WriteResponse(stream, "422 Unprocessable Entity", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"" + JsonEscape(preview.Message) + "\"}");
+                return;
+            }
+
+            string json =
+                "{" +
+                "\"success\":true," +
+                "\"subtotal\":" + JsonNumber(preview.TongTienTruocGiam) + "," +
+                "\"offerId\":" + (preview.MaUuDai.HasValue ? preview.MaUuDai.Value.ToString(CultureInfo.InvariantCulture) : "null") + "," +
+                "\"offerPercent\":" + JsonNumber(preview.PhanTramUuDai) + "," +
+                "\"offerDiscount\":" + JsonNumber(preview.GiamGiaUuDai) + "," +
+                "\"redeemPoints\":" + preview.DiemSuDung.ToString(CultureInfo.InvariantCulture) + "," +
+                "\"pointDiscount\":" + JsonNumber(preview.GiamGiaDiem) + "," +
+                "\"maxRedeemPoints\":" + preview.DiemToiDaCoTheDoi.ToString(CultureInfo.InvariantCulture) + "," +
+                "\"total\":" + JsonNumber(preview.TongTien) +
+                "}";
+
+            WriteResponse(stream, "200 OK", "application/json; charset=utf-8", json);
+        }
+
         private void WriteCheckoutResponse(NetworkStream stream, string body)
         {
             if (SessionManager.CurrentUser == null)
@@ -575,38 +688,19 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
             }
 
             MobileCheckoutRequest mobileRequest;
-            try
+            if (!TryReadMobileCheckoutRequest(stream, body, out mobileRequest))
             {
-                mobileRequest = new JavaScriptSerializer().Deserialize<MobileCheckoutRequest>(body ?? string.Empty);
-            }
-            catch (Exception ex)
-            {
-                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
-                    "{\"success\":false,\"message\":\"Dữ liệu hóa đơn không hợp lệ: " + JsonEscape(ex.Message) + "\"}");
                 return;
             }
 
-            if (mobileRequest == null || mobileRequest.Items == null || mobileRequest.Items.Count == 0)
+            if (mobileRequest.Items == null || mobileRequest.Items.Count == 0)
             {
                 WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
                     "{\"success\":false,\"message\":\"Hóa đơn từ điện thoại chưa có sản phẩm.\"}");
                 return;
             }
 
-            CheckoutRequest checkoutRequest = new CheckoutRequest
-            {
-                MaNV = SessionManager.CurrentUser.MaNV,
-                MaKH = mobileRequest.CustomerId.HasValue && mobileRequest.CustomerId.Value > 0
-                    ? mobileRequest.CustomerId
-                    : null,
-                DiemSuDung = 0,
-                GhiChu = BuildMobileCheckoutNote(mobileRequest.PaymentMethod),
-                ChiTietHoaDon = mobileRequest.Items.Select(item => new InvoiceDetailDTO
-                {
-                    MaSP = item.ProductId,
-                    SoLuong = item.Quantity
-                }).ToList()
-            };
+            CheckoutRequest checkoutRequest = BuildCheckoutRequest(mobileRequest);
 
             OperationResult result = new InvoiceService().Checkout(checkoutRequest);
             if (!result.IsSuccess)
@@ -625,6 +719,57 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
             WriteResponse(stream, "200 OK", "application/json; charset=utf-8",
                 "{\"success\":true,\"message\":\"" + JsonEscape(result.Message) + "\",\"invoiceId\":" +
                 invoiceId.ToString(CultureInfo.InvariantCulture) + "}");
+        }
+
+        private static bool TryReadMobileCheckoutRequest(NetworkStream stream, string body, out MobileCheckoutRequest mobileRequest)
+        {
+            mobileRequest = null;
+
+            try
+            {
+                mobileRequest = new JavaScriptSerializer().Deserialize<MobileCheckoutRequest>(body ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Dữ liệu hóa đơn không hợp lệ: " + JsonEscape(ex.Message) + "\"}");
+                return false;
+            }
+
+            if (mobileRequest == null)
+            {
+                WriteResponse(stream, "400 Bad Request", "application/json; charset=utf-8",
+                    "{\"success\":false,\"message\":\"Dữ liệu hóa đơn không hợp lệ.\"}");
+                return false;
+            }
+
+            return true;
+        }
+
+        private static CheckoutRequest BuildCheckoutRequest(MobileCheckoutRequest mobileRequest)
+        {
+            return new CheckoutRequest
+            {
+                MaNV = SessionManager.CurrentUser.MaNV,
+                MaKH = mobileRequest.CustomerId.HasValue && mobileRequest.CustomerId.Value > 0
+                    ? mobileRequest.CustomerId
+                    : null,
+                MaUuDai = mobileRequest.OfferId.HasValue && mobileRequest.OfferId.Value > 0
+                    ? mobileRequest.OfferId
+                    : null,
+                DiemSuDung = Math.Max(0, mobileRequest.RedeemPoints),
+                GhiChu = BuildMobileCheckoutNote(mobileRequest.PaymentMethod),
+                ChiTietHoaDon = mobileRequest.Items.Select(item => new InvoiceDetailDTO
+                {
+                    MaSP = item.ProductId,
+                    SoLuong = item.Quantity
+                }).ToList()
+            };
+        }
+
+        private static string JsonNumber(decimal value)
+        {
+            return value.ToString("0.##", CultureInfo.InvariantCulture);
         }
 
         private static string BuildMobileCheckoutNote(string paymentMethod)
@@ -727,6 +872,10 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
         private sealed class MobileCheckoutRequest
         {
             public int? CustomerId { get; set; }
+
+            public int? OfferId { get; set; }
+
+            public int RedeemPoints { get; set; }
 
             public string PaymentMethod { get; set; }
 

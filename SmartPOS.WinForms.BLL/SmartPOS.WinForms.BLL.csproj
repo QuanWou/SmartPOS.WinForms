@@ -48,6 +48,7 @@
     <Compile Include="Interfaces\IChatBotAiProvider.cs" />
     <Compile Include="Interfaces\IChatBotService.cs" />
     <Compile Include="Interfaces\ICustomerService.cs" />
+    <Compile Include="Interfaces\ICustomerOfferService.cs" />
     <Compile Include="Interfaces\IInvoiceService.cs" />
     <Compile Include="Interfaces\IProductLotService.cs" />
     <Compile Include="Interfaces\IProductService.cs" />
@@ -59,6 +60,7 @@
     <Compile Include="Services\CategoryService.cs" />
     <Compile Include="Services\ChatBotService.cs" />
     <Compile Include="Services\CustomerService.cs" />
+    <Compile Include="Services\CustomerOfferService.cs" />
     <Compile Include="Services\GeminiChatBotProvider.cs" />
     <Compile Include="Services\InvoiceService.cs" />
     <Compile Include="Services\ProductLotService.cs" />

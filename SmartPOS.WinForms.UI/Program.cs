@@ -14,6 +14,7 @@ namespace SmartPOS.WinForms.UI
             EnvFileLoader.Load();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            PhoneBridgeFirewallHelper.EnsureAsync();
             try
             {
                 Application.Run(new frmLogin());
