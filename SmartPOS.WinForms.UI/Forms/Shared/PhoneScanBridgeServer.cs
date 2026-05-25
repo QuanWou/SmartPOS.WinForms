@@ -32,9 +32,10 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
         private Thread _acceptThread;
 
         private const string TransferBankCode = "TechCombank";
-        private const string TransferBankName = "TechCombank";
+        private const string TransferBankName = "TECHCOMBANK";
         private const string TransferAccountNumber = "19072952746016";
-        private const string TransferAccountName = "NHA HANG SMARTPOS";
+        private const string TransferAccountNumberDisplay = "1907 2952 7460 16";
+        private const string TransferAccountName = "BUI MANH DUNG";
         private const string TransferContent = "Thanh toan hoa don POS";
         private const string TransferTemplate = "compact2";
 
@@ -522,7 +523,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 "{" +
                 "\"bankCode\":\"" + JsonEscape(TransferBankCode) + "\"," +
                 "\"bankName\":\"" + JsonEscape(TransferBankName) + "\"," +
-                "\"accountNumber\":\"" + JsonEscape(TransferAccountNumber) + "\"," +
+                "\"accountNumber\":\"" + JsonEscape(TransferAccountNumberDisplay) + "\"," +
                 "\"accountName\":\"" + JsonEscape(TransferAccountName) + "\"," +
                 "\"content\":\"" + JsonEscape(TransferContent) + "\"," +
                 "\"amount\":" + amountText + "," +

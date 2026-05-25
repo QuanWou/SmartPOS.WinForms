@@ -10,9 +10,10 @@ namespace SmartPOS.WinForms.UI.Forms.POS
     {
         // Update these constants when the restaurant changes its receiving account.
         private const string TransferBankCode = "TechCombank";
-        private const string TransferBankName = "TechCombank";
-        private const string TransferAccountNumber = "2005111818";
-        private const string TransferAccountName = "NHA HANG SMARTPOS";
+        private const string TransferBankName = "TECHCOMBANK";
+        private const string TransferAccountNumber = "19072952746016";
+        private const string TransferAccountNumberDisplay = "1907 2952 7460 16";
+        private const string TransferAccountName = "BUI MANH DUNG";
         private const string TransferContent = "Thanh toan hoa don POS";
         private const string TransferTemplate = "compact2";
         private Label lblMenhGiaTitle;
@@ -543,7 +544,7 @@ namespace SmartPOS.WinForms.UI.Forms.POS
             btnTaiLaiQr.Click += BtnTaiLaiQr_Click;
 
             lblBankValue = BuildInfoLabel("🏦  " + TransferBankName, new Point(16, 20));
-            lblAccountValue = BuildInfoLabel("🔢  " + TransferAccountNumber, new Point(16, 60));
+            lblAccountValue = BuildInfoLabel("🔢  " + TransferAccountNumberDisplay, new Point(16, 60));
             lblAccountNameValue = BuildInfoLabel("👤  " + TransferAccountName, new Point(16, 100));
             lblAmountValue = BuildInfoLabel("💰  " + _tongTien.ToString("N0") + " đ", new Point(16, 140));
 
