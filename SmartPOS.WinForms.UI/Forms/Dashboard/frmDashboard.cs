@@ -839,37 +839,3 @@ namespace SmartPOS.WinForms.UI.Forms.Dashboard
     }
 }
 
-/*
- ╔══════════════════════════════════════════════════════════════════════════╗
- ║  GHI CHÚ TÍCH HỢP – ĐỌC TRƯỚC KHI BUILD                               ║
- ╠══════════════════════════════════════════════════════════════════════════╣
- ║                                                                          ║
- ║  1. BIỂU ĐỒ DOANH THU DẠNG CỘT (BAR CHART)                            ║
- ║     File này dùng:  chartRevenue.ChartType = RevenueChartType.Bar       ║
- ║     Bạn cần thêm vào UcRevenueChart.cs:                                 ║
- ║                                                                          ║
- ║       public enum RevenueChartType { Line, Bar }                         ║
- ║       public RevenueChartType ChartType { get; set; } = RevenueChartType.Bar; ║
- ║                                                                          ║
- ║     Trong OnPaint / vẽ chart, thay vì DrawLines dùng FillRectangle      ║
- ║     cho từng cột theo giá trị DoanhThu.                                  ║
- ║                                                                          ║
- ║  2. CỘT TRÁI – UcCompaniesChart                                         ║
- ║     Giữ nguyên như mẫu cũ. Nếu muốn hiển thị dữ liệu thực, thêm        ║
- ║     method SetData(int totalCategories, int totalProducts) vào lớp đó.  ║
- ║                                                                          ║
- ║  3. CỘT TRÁI LIST – UcRecentTransactions                                ║
- ║     Giữ nguyên. Nếu muốn feed dữ liệu thực, thêm:                      ║
- ║       public void SetData(List<InvoiceDTO> invoices)                    ║
- ║     vào UcRecentTransactions.cs.                                         ║
- ║                                                                          ║
- ║  4. ALERT PANELS                                                         ║
- ║     Hai panel vàng/đỏ nhấp nháy sẽ tự xuất hiện khi có dữ liệu thực.  ║
- ║     Chúng được đẩy vào layout động – RecalcLayout() xử lý tự động.     ║
- ║                                                                          ║
- ║  5. NAMESPACE / USING                                                    ║
- ║     Đảm bảo UcTopProductsChart nằm trong namespace                      ║
- ║     SmartPOS.WinForms.UI.UserControls.Dashboard (hoặc thêm using).      ║
- ║                                                                          ║
- ╚══════════════════════════════════════════════════════════════════════════╝
-*/

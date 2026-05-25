@@ -25,9 +25,11 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
         private Label lblInstruction;
 
         private Label lblTaiKhoan;
+        private Label lblTaiKhoanError;
         private RoundedTextBox txtTaiKhoan;
 
         private Label lblMatKhau;
+        private Label lblMatKhauError;
         private RoundedTextBox txtMatKhau;
 
         private CheckBox chkHienMatKhau;
@@ -134,6 +136,8 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
                 Location = new Point(60, 168)
             };
 
+            lblTaiKhoanError = BuildFieldErrorLabel(new Point(150, 164));
+
             txtTaiKhoan = new RoundedTextBox
             {
                 Location = new Point(60, 188),
@@ -150,6 +154,8 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
                 AutoSize = true,
                 Location = new Point(60, 252)
             };
+
+            lblMatKhauError = BuildFieldErrorLabel(new Point(138, 248));
 
             txtMatKhau = new RoundedTextBox
             {
@@ -210,8 +216,10 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
             pnlForm.Controls.Add(lblWelcome);
             pnlForm.Controls.Add(lblInstruction);
             pnlForm.Controls.Add(lblTaiKhoan);
+            pnlForm.Controls.Add(lblTaiKhoanError);
             pnlForm.Controls.Add(txtTaiKhoan);
             pnlForm.Controls.Add(lblMatKhau);
+            pnlForm.Controls.Add(lblMatKhauError);
             pnlForm.Controls.Add(txtMatKhau);
             pnlForm.Controls.Add(chkHienMatKhau);
             pnlForm.Controls.Add(btnDangNhap);
@@ -304,6 +312,7 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
         {
             string taiKhoan = txtTaiKhoan.Text.Trim();
             string matKhau = txtMatKhau.Text;
+            ClearInlineError();
 
             if (string.IsNullOrEmpty(taiKhoan) || string.IsNullOrEmpty(matKhau))
             {
@@ -333,10 +342,7 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
                     txtMatKhau.Focus();
                     return;
                 }
-                if (_lblError != null)
-                {
-                    _lblError.Visible = false;
-                }
+                ClearInlineError();
                 SessionManager.CurrentUser = response.User;
 
                 // Ngắn delay để hiệu ứng loading hiện ra mượt hơn
@@ -352,7 +358,7 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
 
                 SessionManager.Clear();
                 txtMatKhau.Text = string.Empty;
-                this.Show();if (!response.IsSuccess)
+                this.Show();
                 txtTaiKhoan.Focus();
             }
             catch (Exception ex)
@@ -381,37 +387,79 @@ namespace SmartPOS.WinForms.UI.Forms.Aulh
             Application.DoEvents();
         }
 
-        // ── Inline lỗi (không dùng MessageBox) ───────────────────────────
-        private Label _lblError;
+        private Label BuildFieldErrorLabel(Point location)
+        {
+            return new Label
+            {
+                AutoSize = false,
+                Size = new Size(282, 20),
+                Location = location,
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(210, 70, 70),
+                BackColor = Color.FromArgb(255, 235, 235),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(6, 0, 6, 0),
+                AutoEllipsis = true,
+                Visible = false
+            };
+        }
+
+        // ── Inline lỗi cùng hàng với nhãn field (không dùng MessageBox) ────
         private void ShowInlineError(string message)
         {
-            if (_lblError == null)
-            {
-                _lblError = new Label
-                {
-                    AutoSize = false,
-                    Size = new Size(360, 28),
-                    Location = new Point(60, 316),
-                    Font = new Font("Segoe UI", 9F),
-                    ForeColor = Color.FromArgb(200, 60, 60),
-                    BackColor = Color.FromArgb(255, 235, 235),
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    Padding = new Padding(8, 0, 0, 0)
-                };
-                pnlForm.Controls.Add(_lblError);
-            }
-            _lblError.Text = "⚠  " + message;
-            _lblError.Visible = true;
-            _lblError.BringToFront();
+            ShowFieldBadge(lblMatKhauError, message);
+        }
+
+        private void ClearInlineError()
+        {
+            HideFieldBadge(lblTaiKhoanError);
+            HideFieldBadge(lblMatKhauError);
+        }
+
+        private void ShowFieldBadge(Label label, string message)
+        {
+            string text = "⚠ " + message;
+            int maxWidth = Math.Max(140, 420 - label.Left);
+            int contentWidth = TextRenderer.MeasureText(text, label.Font).Width
+                + label.Padding.Left + label.Padding.Right + 4;
+
+            label.Text = text;
+            label.Width = Math.Min(maxWidth, Math.Max(120, contentWidth));
+            label.Visible = true;
+            label.BringToFront();
+        }
+
+        private void HideFieldBadge(Label label)
+        {
+            label.Visible = false;
+            label.Text = string.Empty;
         }
 
         private void ShowFieldError(Control field)
         {
             field.BackColor = Color.FromArgb(255, 240, 240);
+            if (field == txtTaiKhoan)
+            {
+                ShowFieldBadge(lblTaiKhoanError, "Vui lòng nhập tài khoản.");
+            }
+            else if (field == txtMatKhau)
+            {
+                ShowFieldBadge(lblMatKhauError, "Vui lòng nhập mật khẩu.");
+            }
+
             var timer = new System.Windows.Forms.Timer { Interval = 1500 };
             timer.Tick += (s, e) =>
             {
                 field.BackColor = Color.White;
+                if (field == txtTaiKhoan)
+                {
+                    HideFieldBadge(lblTaiKhoanError);
+                }
+                else if (field == txtMatKhau)
+                {
+                    HideFieldBadge(lblMatKhauError);
+                }
+
                 timer.Stop();
                 timer.Dispose();
             };

@@ -13,10 +13,12 @@ namespace SmartPOS.WinForms.BLL.Services
     public class ChatBotService : IChatBotService
     {
         private readonly IChatBotRepository _chatBotRepository;
+        private readonly IChatBotAiProvider _aiProvider;
 
         public ChatBotService()
         {
             _chatBotRepository = new ChatBotRepository();
+            _aiProvider = new GeminiChatBotProvider();
         }
 
         public ChatBotResponse Ask(string question)
@@ -29,56 +31,248 @@ namespace SmartPOS.WinForms.BLL.Services
 
             try
             {
-                if (ContainsAny(normalized, "sap het hang", "ton kho thap", "gan het hang"))
-                {
-                    return BuildResponse("LowStock", BuildLowStockAnswer());
-                }
-
-                if (ContainsAny(normalized, "doanh thu hom nay", "hom nay doanh thu", "revenue today"))
-                {
-                    return BuildResponse("TodayRevenue", BuildTodayRevenueAnswer());
-                }
-
-                if (ContainsAny(normalized, "top 5", "ban chay", "san pham nao ban", "top san pham"))
-                {
-                    return BuildResponse("TopProducts", BuildTopProductsAnswer());
-                }
-
-                if (ContainsAny(normalized, "hoa don moi nhat", "don moi nhat", "latest invoice"))
-                {
-                    return BuildResponse("LatestInvoices", BuildLatestInvoicesAnswer());
-                }
-
-                if (ContainsAny(normalized, "tong so khach hang", "bao nhieu khach", "so khach hang", "tong khach hang"))
-                {
-                    return BuildResponse("CustomerCount", BuildCustomerCountAnswer());
-                }
-
-                if (ContainsAny(normalized, "doanh thu tuan", "giam vi", "phan tich doanh thu", "so voi tuan truoc"))
-                {
-                    return BuildResponse("RevenueAnalysis", BuildRevenueAnalysisAnswer());
-                }
-
-                if (ContainsAny(normalized, "ton kho cao", "khuyen mai", "ban cham", "hang ton"))
-                {
-                    return BuildResponse("PromotionSuggestion", BuildPromotionSuggestionAnswer());
-                }
-
-                if (ContainsAny(normalized, "nen nhap them", "can nhap them", "goi y nhap", "nhap hang"))
-                {
-                    return BuildResponse("RestockSuggestion", BuildRestockSuggestionAnswer());
-                }
-
-                if (ContainsAny(normalized, "huong dan", "su dung", "pos", "ban hang"))
-                {
-                    return BuildResponse("Guide", BuildGuideAnswer());
-                }
-
-                return BuildResponse("Fallback", BuildFallbackAnswer());
+                ChatBotResponse localResponse = BuildLocalResponse(normalized);
+                ChatBotResponse aiResponse = TryBuildAiResponse(question, localResponse);
+                return aiResponse ?? localResponse;
             }
             catch (Exception ex)
             {
                 return BuildResponse("Error", "Mình chưa thể truy vấn dữ liệu lúc này.\r\nChi tiết: " + ex.Message);
+            }
+        }
+
+        private ChatBotResponse BuildLocalResponse(string normalized)
+        {
+            if (ContainsAny(normalized, "sap het hang", "ton kho thap", "gan het hang"))
+            {
+                return BuildResponse("LowStock", BuildLowStockAnswer());
+            }
+
+            if (ContainsAny(normalized, "doanh thu hom nay", "hom nay doanh thu", "revenue today"))
+            {
+                return BuildResponse("TodayRevenue", BuildTodayRevenueAnswer());
+            }
+
+            if (ContainsAny(normalized, "top 5", "ban chay", "san pham nao ban", "top san pham"))
+            {
+                return BuildResponse("TopProducts", BuildTopProductsAnswer());
+            }
+
+            if (ContainsAny(normalized, "hoa don moi nhat", "don moi nhat", "latest invoice"))
+            {
+                return BuildResponse("LatestInvoices", BuildLatestInvoicesAnswer());
+            }
+
+            if (ContainsAny(normalized, "tong so khach hang", "bao nhieu khach", "so khach hang", "tong khach hang"))
+            {
+                return BuildResponse("CustomerCount", BuildCustomerCountAnswer());
+            }
+
+            if (ContainsAny(normalized, "doanh thu tuan", "giam vi", "phan tich doanh thu", "so voi tuan truoc"))
+            {
+                return BuildResponse("RevenueAnalysis", BuildRevenueAnalysisAnswer());
+            }
+
+            if (ContainsAny(normalized, "ton kho cao", "khuyen mai", "ban cham", "hang ton"))
+            {
+                return BuildResponse("PromotionSuggestion", BuildPromotionSuggestionAnswer());
+            }
+
+            if (ContainsAny(normalized, "nen nhap them", "can nhap them", "goi y nhap", "nhap hang"))
+            {
+                return BuildResponse("RestockSuggestion", BuildRestockSuggestionAnswer());
+            }
+
+            if (ContainsAny(normalized, "huong dan", "su dung", "pos", "ban hang"))
+            {
+                return BuildResponse("Guide", BuildGuideAnswer());
+            }
+
+            return BuildResponse("Fallback", BuildFallbackAnswer());
+        }
+
+        private ChatBotResponse TryBuildAiResponse(string question, ChatBotResponse localResponse)
+        {
+            if (_aiProvider == null || !_aiProvider.IsConfigured)
+            {
+                return null;
+            }
+
+            try
+            {
+                string context = BuildBusinessContext();
+                string answer = _aiProvider.Analyze(question, context);
+                if (string.IsNullOrWhiteSpace(answer))
+                {
+                    return null;
+                }
+
+                string intent = "OpenAI";
+                if (localResponse != null && !string.IsNullOrWhiteSpace(localResponse.Intent))
+                {
+                    intent = localResponse.Intent + "+OpenAI";
+                }
+
+                return BuildResponse(intent, answer);
+            }
+            catch (Exception ex)
+            {
+                if (localResponse == null)
+                {
+                    return BuildResponse("OpenAIError", "AI nâng cao chưa khả dụng.\r\nChi tiết: " + ex.Message);
+                }
+
+                localResponse.Answer += "\r\n\r\nAI nâng cao chưa khả dụng, đang dùng phân tích nội bộ.\r\nChi tiết: " + ex.Message;
+                return localResponse;
+            }
+        }
+
+        private string BuildBusinessContext()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine("Thời điểm dữ liệu: " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
+            builder.AppendLine("Lưu ý riêng tư: ngữ cảnh AI chỉ gửi số liệu vận hành và mã hóa đơn, không gửi tên khách hàng/nhân viên.");
+
+            AppendContextSection(builder, "Doanh thu hôm nay", delegate
+            {
+                ChatBotMetricResponse metric = _chatBotRepository.GetTodayRevenue();
+                builder.AppendLine("- Doanh thu: " + metric.Amount.ToString("N0") + " đ");
+                builder.AppendLine("- Số hóa đơn đã thanh toán: " + metric.Count.ToString("N0"));
+                builder.AppendLine("- Giá trị trung bình mỗi hóa đơn: " + metric.SecondaryAmount.ToString("N0") + " đ");
+            });
+
+            AppendContextSection(builder, "Khách hàng", delegate
+            {
+                ChatBotMetricResponse metric = _chatBotRepository.GetCustomerStats();
+                builder.AppendLine("- Tổng khách hàng: " + metric.Count.ToString("N0"));
+                builder.AppendLine("- Khách đang hoạt động: " + metric.SecondaryCount.ToString("N0"));
+                builder.AppendLine("- Tổng chi tiêu ghi nhận: " + metric.Amount.ToString("N0") + " đ");
+                builder.AppendLine("- Tổng điểm hiện có: " + metric.SecondaryAmount.ToString("N0"));
+            });
+
+            AppendContextSection(builder, "Sản phẩm sắp hết hàng", delegate
+            {
+                var products = _chatBotRepository.GetLowStockProducts(10, 8).ToList();
+                AppendProductInsightLines(builder, products, true, false, false);
+            });
+
+            AppendContextSection(builder, "Top sản phẩm bán chạy 30 ngày", delegate
+            {
+                var products = _chatBotRepository.GetTopSellingProducts(30, 8).ToList();
+                AppendProductInsightLines(builder, products, true, true, false);
+            });
+
+            AppendContextSection(builder, "Hóa đơn mới nhất", delegate
+            {
+                var invoices = _chatBotRepository.GetLatestInvoices(5).ToList();
+                if (!invoices.Any())
+                {
+                    builder.AppendLine("- Không có dữ liệu.");
+                    return;
+                }
+
+                foreach (ChatBotInvoiceSummaryResponse item in invoices)
+                {
+                    builder.AppendLine("- #" + item.MaHD +
+                        " | " + item.NgayLap.ToString("dd/MM/yyyy HH:mm") +
+                        " | " + item.TongTien.ToString("N0") + " đ" +
+                        " | " + GetInvoiceStatusText(item.TrangThai));
+                }
+            });
+
+            AppendContextSection(builder, "So sánh doanh thu theo danh mục 7 ngày", delegate
+            {
+                var categories = _chatBotRepository.GetRevenueComparisonByCategory(7)
+                    .OrderBy(x => x.ChangeAmount)
+                    .Take(8)
+                    .ToList();
+
+                if (!categories.Any())
+                {
+                    builder.AppendLine("- Không có dữ liệu.");
+                    return;
+                }
+
+                foreach (ChatBotCategoryComparisonResponse item in categories)
+                {
+                    builder.AppendLine("- " + item.TenLoai +
+                        ": kỳ này " + item.CurrentRevenue.ToString("N0") + " đ" +
+                        ", kỳ trước " + item.PreviousRevenue.ToString("N0") + " đ" +
+                        ", chênh " + item.ChangeAmount.ToString("N0") + " đ" +
+                        " (" + item.ChangePercent.ToString("0.##") + "%)");
+                }
+            });
+
+            AppendContextSection(builder, "Hàng tồn cao bán chậm", delegate
+            {
+                var products = _chatBotRepository.GetHighStockSlowMovingProducts(50, 5, 30, 8).ToList();
+                AppendProductInsightLines(builder, products, true, true, false);
+            });
+
+            AppendContextSection(builder, "Gợi ý nhập hàng", delegate
+            {
+                var products = _chatBotRepository.GetRestockSuggestions(10, 14, 8).ToList();
+                AppendProductInsightLines(builder, products, true, false, true);
+            });
+
+            return builder.ToString();
+        }
+
+        private void AppendContextSection(StringBuilder builder, string title, Action append)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## " + title);
+
+            try
+            {
+                append();
+            }
+            catch
+            {
+                builder.AppendLine("- Không tải được dữ liệu phần này.");
+            }
+        }
+
+        private void AppendProductInsightLines(
+            StringBuilder builder,
+            IList<ChatBotProductInsightResponse> products,
+            bool includeStock,
+            bool includeSales,
+            bool includeAverageDailySold)
+        {
+            if (products == null || products.Count == 0)
+            {
+                builder.AppendLine("- Không có dữ liệu.");
+                return;
+            }
+
+            foreach (ChatBotProductInsightResponse item in products)
+            {
+                StringBuilder line = new StringBuilder();
+                line.Append("- " + item.TenSP);
+
+                if (!string.IsNullOrWhiteSpace(item.MaVach))
+                {
+                    line.Append(" | mã: " + item.MaVach);
+                }
+
+                if (includeStock)
+                {
+                    line.Append(" | tồn: " + item.SoLuongTon.ToString("N0"));
+                }
+
+                if (includeSales)
+                {
+                    line.Append(" | bán: " + item.QuantitySold.ToString("N0"));
+                    line.Append(" | doanh thu: " + item.Revenue.ToString("N0") + " đ");
+                }
+
+                if (includeAverageDailySold)
+                {
+                    line.Append(" | bán TB/ngày: " + item.AverageDailySold.ToString("0.##"));
+                }
+
+                builder.AppendLine(line.ToString());
             }
         }
 

@@ -2,3 +2,6 @@
 [Bbin/
 [Bb]in/
 [Oo]bj/
+.env
+.env.*
+!.env.example

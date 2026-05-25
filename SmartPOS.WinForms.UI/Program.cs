@@ -2,6 +2,7 @@
 using System.Windows.Forms;
 using SmartPOS.WinForms.UI.Forms.Aulh;
 using SmartPOS.WinForms.UI.Forms.Shared;
+using SmartPOS.WinForms.UI.Helpers;
 
 namespace SmartPOS.WinForms.UI
 {
@@ -10,6 +11,7 @@ namespace SmartPOS.WinForms.UI
         [STAThread]
         static void Main()
         {
+            EnvFileLoader.Load();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             try

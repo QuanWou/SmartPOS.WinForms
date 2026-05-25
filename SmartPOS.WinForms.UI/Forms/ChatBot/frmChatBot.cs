@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
@@ -26,6 +27,8 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
         private FlowLayoutPanel flpSuggestions;
         private FlowLayoutPanel flpQuickQuestions;
         private Label lblStatus;
+        private readonly List<ChatMessageItem> _messages = new List<ChatMessageItem>();
+        private int _lastMessageLayoutWidth = -1;
 
         private static readonly Color Bg = Color.FromArgb(248, 250, 252);
         private static readonly Color Surface = Color.White;
@@ -274,9 +277,14 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
             return button;
         }
 
-        private void SubmitQuestion(string question)
+        private async void SubmitQuestion(string question)
         {
             if (string.IsNullOrWhiteSpace(question))
+            {
+                return;
+            }
+
+            if (!btnSend.Enabled)
             {
                 return;
             }
@@ -291,9 +299,20 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
 
             try
             {
-                ChatBotResponse response = _chatBotService.Ask(question);
-                AddBotMessage(response.Answer);
-                RenderSuggestions(response.SuggestedQuestions);
+                ChatBotResponse response = await Task.Run(() => _chatBotService.Ask(question));
+                if (response == null || string.IsNullOrWhiteSpace(response.Answer))
+                {
+                    AddBotMessage("Mình chưa nhận được câu trả lời phù hợp. Bạn thử hỏi lại ngắn hơn nhé.");
+                }
+                else
+                {
+                    AddBotMessage(response.Answer);
+                    RenderSuggestions(response.SuggestedQuestions);
+                }
+            }
+            catch (Exception ex)
+            {
+                AddBotMessage("Mình chưa thể xử lý câu hỏi lúc này.\r\nChi tiết: " + ex.Message);
             }
             finally
             {
@@ -304,61 +323,128 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
 
         private void AddUserMessage(string text)
         {
-            AddMessageBubble(text, true);
+            AddMessage(text, true);
         }
 
         private void AddBotMessage(string text)
         {
-            AddMessageBubble(text, false);
+            AddMessage(text, false);
         }
 
-        private void AddMessageBubble(string text, bool isUser)
+        private void AddMessage(string text, bool isUser)
+        {
+            text = NormalizeMessageText(text);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            var message = new ChatMessageItem
+            {
+                Text = text,
+                IsUser = isUser,
+                CreatedAt = DateTime.Now
+            };
+
+            _messages.Add(message);
+            AddMessageBubble(message);
+            flpMessages.ScrollControlIntoView(flpMessages.Controls[flpMessages.Controls.Count - 1]);
+        }
+
+        private void RenderMessages()
+        {
+            flpMessages.SuspendLayout();
+            flpMessages.Controls.Clear();
+
+            foreach (ChatMessageItem message in _messages)
+            {
+                AddMessageBubble(message);
+            }
+
+            flpMessages.ResumeLayout(true);
+            _lastMessageLayoutWidth = flpMessages.ClientSize.Width;
+
+            if (flpMessages.Controls.Count > 0)
+            {
+                flpMessages.ScrollControlIntoView(flpMessages.Controls[flpMessages.Controls.Count - 1]);
+            }
+        }
+
+        private void AddMessageBubble(ChatMessageItem message)
         {
             int rowWidth = Math.Max(260, flpMessages.ClientSize.Width - 24);
 
-            Font messageFont = new Font("Segoe UI", 8.8F);
+            int maxAvailableWidth = Math.Max(150, rowWidth - 16);
+            int bubbleWidth = Math.Min(message.IsUser ? 360 : 520, maxAvailableWidth);
+            int contentWidth = Math.Max(120, bubbleWidth - 24);
 
-            int maxBubbleWidth = isUser
-                ? Math.Min(360, rowWidth - 140)
-                : Math.Min(520, rowWidth - 90);
+            var bubble = new BubblePanel
+            {
+                Radius = 14,
+                BorderColor = message.IsUser ? Accent : Border,
+                BackColor = message.IsUser ? Accent : Surface,
+                Width = bubbleWidth
+            };
 
-            int minBubbleWidth = isUser ? 170 : 220;
+            var textLabel = new Label
+            {
+                Text = message.Text,
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.8F),
+                ForeColor = message.IsUser ? Color.White : TextMain,
+                BackColor = Color.Transparent,
+                Location = new Point(12, 9),
+                MaximumSize = new Size(contentWidth, 0),
+                UseCompatibleTextRendering = false
+            };
 
-            Size measured = TextRenderer.MeasureText(
-                text,
-                messageFont,
-                new Size(maxBubbleWidth - 24, 0),
-                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+            bubble.Controls.Add(textLabel);
+            textLabel.PerformLayout();
 
-            int bubbleWidth = Math.Max(minBubbleWidth, Math.Min(maxBubbleWidth, measured.Width + 30));
-            int bubbleHeight = Math.Max(48, measured.Height + 34);
+            var timeLabel = new Label
+            {
+                Text = message.CreatedAt.ToString("HH:mm"),
+                AutoSize = false,
+                Font = new Font("Segoe UI", 6.8F),
+                ForeColor = message.IsUser ? Color.FromArgb(225, 235, 255) : Muted,
+                BackColor = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleRight,
+                Location = new Point(12, textLabel.Bottom + 2),
+                Size = new Size(contentWidth, 14)
+            };
+
+            bubble.Controls.Add(timeLabel);
+            bubble.Height = Math.Max(48, timeLabel.Bottom + 8);
 
             var wrapper = new Panel
             {
                 Width = rowWidth,
-                Height = bubbleHeight,
+                Height = bubble.Height,
                 AutoSize = false,
                 Margin = new Padding(0, 0, 0, 10),
                 BackColor = ChatBg,
-                Tag = isUser
+                Tag = message.IsUser
             };
 
-            var bubble = new ChatBubbleControl
-            {
-                MessageText = text,
-                IsUserMessage = isUser,
-                CreatedAt = DateTime.Now,
-                Width = bubbleWidth,
-                Height = bubbleHeight,
-                Font = messageFont
-            };
-
-            bubble.Left = isUser ? rowWidth - bubbleWidth - 6 : 6;
+            bubble.Left = message.IsUser ? rowWidth - bubbleWidth - 6 : 6;
             bubble.Top = 0;
 
             wrapper.Controls.Add(bubble);
             flpMessages.Controls.Add(wrapper);
-            flpMessages.ScrollControlIntoView(wrapper);
+        }
+
+        private static string NormalizeMessageText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            return text
+                .Trim()
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Replace("\n", Environment.NewLine);
         }
 
         private void RenderSuggestions(IEnumerable<string> suggestions)
@@ -438,20 +524,9 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
 
             flpMessages.SetBounds(18, 66, pnlChat.Width - 36, pnlInputWrap.Top - 78);
 
-            foreach (Control wrapper in flpMessages.Controls)
+            if (_messages.Count > 0 && _lastMessageLayoutWidth != flpMessages.ClientSize.Width)
             {
-                wrapper.Width = Math.Max(260, flpMessages.ClientSize.Width - 24);
-
-                if (wrapper.Controls.Count > 0)
-                {
-                    Control bubble = wrapper.Controls[0];
-
-                    bool isUser = wrapper.Tag is bool value && value;
-
-                    bubble.Left = isUser
-                        ? wrapper.Width - bubble.Width - 6
-                        : 6;
-                }
+                RenderMessages();
             }
 
             if (pnlSide.Visible)
@@ -483,6 +558,14 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
                     e.Graphics.DrawPath(pen, path);
                 }
             }
+        }
+        private class ChatMessageItem
+        {
+            public string Text { get; set; }
+
+            public bool IsUser { get; set; }
+
+            public DateTime CreatedAt { get; set; }
         }
         private class ChatBubbleControl : Control
         {
@@ -536,22 +619,27 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
                     Font,
                     textRect,
                     textColor,
-                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.TextBoxControl);
 
                 Rectangle timeRect = new Rectangle(12, Height - 18, Width - 24, 14);
 
-                TextRenderer.DrawText(
-                    e.Graphics,
-                    CreatedAt.ToString("HH:mm"),
-                    new Font("Segoe UI", 6.8F),
-                    timeRect,
-                    timeColor,
-                    TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
+                using (Font timeFont = new Font("Segoe UI", 6.8F))
+                {
+                    TextRenderer.DrawText(
+                        e.Graphics,
+                        CreatedAt.ToString("HH:mm"),
+                        timeFont,
+                        timeRect,
+                        timeColor,
+                        TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
+                }
             }
         }
         private class BubblePanel : Panel
         {
             public int Radius { get; set; } = 10;
+
+            public Color BorderColor { get; set; } = Border;
 
             protected override void OnPaint(PaintEventArgs e)
             {
@@ -559,8 +647,10 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
                 Rectangle rect = new Rectangle(0, 0, Width - 1, Height - 1);
                 using (GraphicsPath path = RoundedPath(rect, Radius))
                 using (SolidBrush brush = new SolidBrush(BackColor))
+                using (Pen pen = new Pen(BorderColor))
                 {
                     e.Graphics.FillPath(brush, path);
+                    e.Graphics.DrawPath(pen, path);
                 }
             }
         }

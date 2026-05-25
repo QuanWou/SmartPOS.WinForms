@@ -24,6 +24,13 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
         private readonly int? _initialProductId;
         private bool _promptInitialProductOnLoad;
 
+        private static readonly Color PrimaryButtonColor = Color.FromArgb(22, 32, 72);
+        private static readonly Color SecondaryButtonColor = Color.FromArgb(90, 110, 200);
+        private static readonly Color DeleteButtonColor = Color.FromArgb(205, 72, 80);
+        private static readonly Color NeutralButtonColor = Color.FromArgb(241, 245, 249);
+        private static readonly Color NeutralButtonBorderColor = Color.FromArgb(203, 213, 225);
+        private static readonly Color NeutralButtonTextColor = Color.FromArgb(30, 41, 59);
+
         private Panel pnlHeader;
         private Panel pnlLeft;
         private Panel pnlRight;
@@ -157,11 +164,12 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Text = "Tìm",
                 Location = new Point(360, 62),
                 Size = new Size(70, 30),
-                BackColor = Color.FromArgb(22, 32, 72),
+                BackColor = PrimaryButtonColor,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
             btnSearch.FlatAppearance.BorderSize = 0;
+            btnSearch.UseVisualStyleBackColor = false;
             btnSearch.Click += BtnSearch_Click;
 
             btnCameraScan = new Button
@@ -169,11 +177,12 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Text = "Quét cam",
                 Location = new Point(440, 62),
                 Size = new Size(100, 30),
-                BackColor = Color.FromArgb(22, 32, 72),
+                BackColor = PrimaryButtonColor,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
             btnCameraScan.FlatAppearance.BorderSize = 0;
+            btnCameraScan.UseVisualStyleBackColor = false;
             btnCameraScan.Click += BtnCameraScan_Click;
 
             btnPhoneScan = new Button
@@ -181,11 +190,12 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Text = "Qu\u00e9t \u0111t",
                 Location = new Point(550, 62),
                 Size = new Size(100, 30),
-                BackColor = Color.FromArgb(49, 82, 182),
+                BackColor = SecondaryButtonColor,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat
             };
             btnPhoneScan.FlatAppearance.BorderSize = 0;
+            btnPhoneScan.UseVisualStyleBackColor = false;
             btnPhoneScan.Click += BtnPhoneScan_Click;
 
             pnlHeader.Controls.Add(lblTitle);
@@ -490,16 +500,16 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Enabled = false
             };
 
-            btnAddItem = MakeEditorButton("Thêm dòng", Color.FromArgb(90, 110, 200), Color.White);
+            btnAddItem = MakeEditorButton("Thêm dòng", SecondaryButtonColor, Color.White);
             btnAddItem.Click += BtnAddItem_Click;
 
-            btnUpdateItem = MakeEditorButton("Cập nhật", Color.FromArgb(22, 32, 72), Color.White);
+            btnUpdateItem = MakeEditorButton("Cập nhật", PrimaryButtonColor, Color.White);
             btnUpdateItem.Click += BtnUpdateItem_Click;
 
-            btnDeleteItem = MakeEditorButton("Xóa dòng", Color.FromArgb(220, 80, 80), Color.White);
+            btnDeleteItem = MakeEditorButton("Xóa dòng", DeleteButtonColor, Color.White);
             btnDeleteItem.Click += BtnDeleteItem_Click;
 
-            btnClearItem = MakeEditorButton("Làm mới", Color.FromArgb(230, 233, 240), Color.Black);
+            btnClearItem = MakeEditorButton("Làm mới", NeutralButtonColor, NeutralButtonTextColor, NeutralButtonBorderColor);
             btnClearItem.Click += (s, e) => ClearLineEditor();
 
             pnlLineEditor.Controls.Add(lblSelectedProduct);
@@ -517,15 +527,24 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private Button MakeEditorButton(string text, Color backColor, Color foreColor)
         {
+            return MakeEditorButton(text, backColor, foreColor, Color.Empty);
+        }
+
+        private Button MakeEditorButton(string text, Color backColor, Color foreColor, Color borderColor)
+        {
             Button button = new Button
             {
                 Text = text,
                 Size = new Size(94, 32),
                 BackColor = backColor,
                 ForeColor = foreColor,
-                FlatStyle = FlatStyle.Flat
+                FlatStyle = FlatStyle.Flat,
+                UseVisualStyleBackColor = false
             };
-            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.BorderSize = borderColor == Color.Empty ? 0 : 1;
+            button.FlatAppearance.BorderColor = borderColor == Color.Empty ? backColor : borderColor;
+            button.FlatAppearance.MouseOverBackColor = ControlPaint.Light(backColor, 0.12F);
+            button.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(backColor, 0.08F);
             return button;
         }
 
@@ -567,9 +586,10 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
                 Text = "Lưu phiếu nhập",
                 Size = new Size(150, 38),
                 Location = new Point(760, 38),
-                BackColor = Color.FromArgb(22, 32, 72),
+                BackColor = PrimaryButtonColor,
                 ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
+                FlatStyle = FlatStyle.Flat,
+                UseVisualStyleBackColor = false
             };
             btnSave.FlatAppearance.BorderSize = 0;
             btnSave.Click += BtnSave_Click;
@@ -1374,22 +1394,19 @@ namespace SmartPOS.WinForms.UI.Forms.Stock
 
         private void UpdateLineEditorButtons()
         {
-            bool hasProduct = _selectedProductId.HasValue;
-            bool isEditing = _editingLineId.HasValue;
-
             if (btnAddItem != null)
             {
-                btnAddItem.Enabled = hasProduct;
+                btnAddItem.Enabled = true;
             }
 
             if (btnUpdateItem != null)
             {
-                btnUpdateItem.Enabled = hasProduct && isEditing;
+                btnUpdateItem.Enabled = true;
             }
 
             if (btnDeleteItem != null)
             {
-                btnDeleteItem.Enabled = isEditing;
+                btnDeleteItem.Enabled = true;
             }
         }
 

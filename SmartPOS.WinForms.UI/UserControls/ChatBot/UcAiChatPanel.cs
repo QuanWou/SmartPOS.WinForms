@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using SmartPOS.WinForms.BLL.Interfaces;
 using SmartPOS.WinForms.BLL.Services;
@@ -24,6 +25,7 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
         private Button btnClose;
         private Button btnExpand;
         private Label lblStatus;
+        private int _lastMessageLayoutWidth = -1;
 
         private static readonly Color Surface = Color.White;
         private static readonly Color Primary = Color.FromArgb(22, 32, 72);
@@ -287,9 +289,14 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
             return button;
         }
 
-        private void SubmitQuestion(string question)
+        private async void SubmitQuestion(string question)
         {
             if (string.IsNullOrWhiteSpace(question))
+            {
+                return;
+            }
+
+            if (!btnSend.Enabled)
             {
                 return;
             }
@@ -307,8 +314,18 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
 
             try
             {
-                ChatBotResponse response = _chatBotService.Ask(question);
-                SessionManager.AddChatMessage(false, response.Answer);
+                ChatBotResponse response = await Task.Run(() => _chatBotService.Ask(question));
+                string answer = response == null || string.IsNullOrWhiteSpace(response.Answer)
+                    ? "Mình chưa nhận được câu trả lời phù hợp. Bạn thử hỏi lại ngắn hơn nhé."
+                    : response.Answer;
+
+                SessionManager.AddChatMessage(false, answer);
+                AddMessageBubble(SessionManager.ChatMessages.Last());
+                ScrollToBottom();
+            }
+            catch (Exception ex)
+            {
+                SessionManager.AddChatMessage(false, "Mình chưa thể xử lý câu hỏi lúc này.\r\nChi tiết: " + ex.Message);
                 AddMessageBubble(SessionManager.ChatMessages.Last());
                 ScrollToBottom();
             }
@@ -329,27 +346,20 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
                 AddMessageBubble(message);
             }
             flpMessages.ResumeLayout(true);
+            _lastMessageLayoutWidth = flpMessages.ClientSize.Width;
             ScrollToBottom();
         }
 
         private void AddMessageBubble(ChatSessionMessageDTO message)
         {
             bool isUser = message.IsUser;
+            string messageText = NormalizeMessageText(message.Text);
 
             int rowWidth = Math.Max(240, flpMessages.ClientSize.Width - 20);
 
-            int bubbleWidth;
-            if (Width >= 400)
-            {
-                bubbleWidth = isUser ? 250 : 270;
-            }
-            else
-            {
-                bubbleWidth = isUser ? 220 : 240;
-            }
-
-            bubbleWidth = Math.Min(bubbleWidth, rowWidth - 16);
-            bubbleWidth = Math.Max(150, bubbleWidth);
+            int maxAvailableWidth = Math.Max(150, rowWidth - 16);
+            int bubbleWidth = Math.Min(isUser ? 270 : 300, maxAvailableWidth);
+            int contentWidth = Math.Max(120, bubbleWidth - 20);
 
             var row = new Panel
             {
@@ -369,21 +379,18 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
 
             var text = new Label
             {
-                Text = message.Text,
-                AutoSize = false,
+                Text = messageText,
+                AutoSize = true,
                 Font = new Font("Segoe UI", 8.4F),
                 ForeColor = isUser ? Color.White : TextMain,
                 BackColor = Color.Transparent,
-                Location = new Point(10, 8)
+                Location = new Point(10, 8),
+                MaximumSize = new Size(contentWidth, 0),
+                UseCompatibleTextRendering = false
             };
 
-            Size measured = TextRenderer.MeasureText(
-                text.Text,
-                text.Font,
-                new Size(bubbleWidth - 20, 0),
-                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
-
-            text.Size = new Size(bubbleWidth - 20, Math.Max(18, measured.Height));
+            bubble.Controls.Add(text);
+            text.PerformLayout();
 
             var time = new Label
             {
@@ -393,12 +400,11 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
                 BackColor = Color.Transparent,
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleRight,
-                Size = new Size(bubbleWidth - 20, 14),
+                Size = new Size(contentWidth, 14),
                 Location = new Point(10, text.Bottom + 2)
             };
 
             bubble.Height = time.Bottom + 8;
-            bubble.Controls.Add(text);
             bubble.Controls.Add(time);
 
             bubble.Left = isUser ? rowWidth - bubbleWidth - 2 : 2;
@@ -408,6 +414,20 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
             row.Controls.Add(bubble);
 
             flpMessages.Controls.Add(row);
+        }
+
+        private static string NormalizeMessageText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return string.Empty;
+            }
+
+            return text
+                .Trim()
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Replace("\n", Environment.NewLine);
         }
 
         private void TxtQuestion_KeyDown(object sender, KeyEventArgs e)
@@ -434,9 +454,17 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
             btnClose.Location = new Point(Width - 44, 23);
             btnExpand.Location = new Point(Width - 80, 23);
 
-            foreach (Control control in flpMessages.Controls)
+            if (flpMessages != null)
             {
-                control.Width = Math.Max(270, flpMessages.ClientSize.Width - 34);
+                int messageWidth = flpMessages.ClientSize.Width;
+                if (messageWidth > 0 &&
+                    messageWidth != _lastMessageLayoutWidth &&
+                    SessionManager.ChatMessages.Count > 0)
+                {
+                    RenderMessages();
+                }
+
+                _lastMessageLayoutWidth = messageWidth;
             }
 
             int quickWidth = Width >= 400 ? 174 : 150;

@@ -11,6 +11,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -134,14 +135,22 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
         public static string GetBestLanAddress()
         {
-            IPAddress bestAddress = Dns.GetHostEntry(Dns.GetHostName())
-                .AddressList
-                .FirstOrDefault(ip =>
-                    ip.AddressFamily == AddressFamily.InterNetwork &&
-                    !IPAddress.IsLoopback(ip) &&
-                    !ip.ToString().StartsWith("169.254.", StringComparison.OrdinalIgnoreCase));
+            NetworkAddressCandidate bestCandidate = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(IsUsableNetworkInterface)
+                .SelectMany(CreateAddressCandidates)
+                .OrderByDescending(candidate => candidate.Score)
+                .FirstOrDefault();
 
-            return bestAddress != null ? bestAddress.ToString() : string.Empty;
+            if (bestCandidate != null)
+            {
+                return bestCandidate.Address.ToString();
+            }
+
+            IPAddress fallbackAddress = Dns.GetHostEntry(Dns.GetHostName())
+                .AddressList
+                .FirstOrDefault(IsUsableIpv4Address);
+
+            return fallbackAddress != null ? fallbackAddress.ToString() : string.Empty;
         }
 
         private void AcceptLoop()
@@ -151,7 +160,7 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                 try
                 {
                     TcpClient client = _listener.AcceptTcpClient();
-                    ThreadPool.QueueUserWorkItem(_ => ProcessClient(client));
+                    ThreadPool.QueueUserWorkItem(_ => ProcessClientSafely(client));
                 }
                 catch
                 {
@@ -159,6 +168,30 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
                     {
                         break;
                     }
+                }
+            }
+        }
+
+        private void ProcessClientSafely(TcpClient client)
+        {
+            try
+            {
+                ProcessClient(client);
+            }
+            catch (IOException)
+            {
+            }
+            catch (SocketException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception ex)
+            {
+                if (!_isStopping)
+                {
+                    System.Diagnostics.Debug.WriteLine("Phone scan bridge request failed: " + ex.Message);
                 }
             }
         }
@@ -229,6 +262,104 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
 
                 RouteRequest(stream, method, path, body);
             }
+        }
+
+        private static IEnumerable<NetworkAddressCandidate> CreateAddressCandidates(NetworkInterface networkInterface)
+        {
+            IPInterfaceProperties properties = networkInterface.GetIPProperties();
+            bool hasGateway = properties.GatewayAddresses
+                .Any(gateway => gateway.Address != null && IsUsableIpv4Address(gateway.Address));
+            bool isVirtual = IsVirtualNetworkInterface(networkInterface);
+
+            foreach (UnicastIPAddressInformation addressInfo in properties.UnicastAddresses)
+            {
+                IPAddress address = addressInfo.Address;
+                if (!IsUsableIpv4Address(address))
+                {
+                    continue;
+                }
+
+                int score = 0;
+                if (hasGateway)
+                {
+                    score += 100;
+                }
+
+                if (!isVirtual)
+                {
+                    score += 60;
+                }
+
+                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                {
+                    score += 35;
+                }
+                else if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                         networkInterface.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet)
+                {
+                    score += 30;
+                }
+
+                if (IsPrivateIpv4Address(address))
+                {
+                    score += 20;
+                }
+
+                yield return new NetworkAddressCandidate(address, score);
+            }
+        }
+
+        private static bool IsUsableNetworkInterface(NetworkInterface networkInterface)
+        {
+            if (networkInterface == null ||
+                networkInterface.OperationalStatus != OperationalStatus.Up ||
+                networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                networkInterface.NetworkInterfaceType == NetworkInterfaceType.Tunnel)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsVirtualNetworkInterface(NetworkInterface networkInterface)
+        {
+            string name = ((networkInterface.Name ?? string.Empty) + " " +
+                           (networkInterface.Description ?? string.Empty)).ToLowerInvariant();
+
+            return name.Contains("virtual") ||
+                   name.Contains("hyper-v") ||
+                   name.Contains("vethernet") ||
+                   name.Contains("vmware") ||
+                   name.Contains("virtualbox") ||
+                   name.Contains("docker") ||
+                   name.Contains("wsl") ||
+                   name.Contains("loopback") ||
+                   name.Contains("bluetooth") ||
+                   name.Contains("tap") ||
+                   name.Contains("npcap");
+        }
+
+        private static bool IsUsableIpv4Address(IPAddress address)
+        {
+            if (address == null ||
+                address.AddressFamily != AddressFamily.InterNetwork ||
+                IPAddress.IsLoopback(address))
+            {
+                return false;
+            }
+
+            byte[] bytes = address.GetAddressBytes();
+            return bytes[0] != 0 &&
+                   !(bytes[0] == 169 && bytes[1] == 254);
+        }
+
+        private static bool IsPrivateIpv4Address(IPAddress address)
+        {
+            byte[] bytes = address.GetAddressBytes();
+            return bytes[0] == 10 ||
+                   (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+                   (bytes[0] == 192 && bytes[1] == 168);
         }
 
         private void RouteRequest(NetworkStream stream, string method, string path, string body)
@@ -607,6 +738,19 @@ namespace SmartPOS.WinForms.UI.Forms.Shared
             public int ProductId { get; set; }
 
             public int Quantity { get; set; }
+        }
+
+        private sealed class NetworkAddressCandidate
+        {
+            public NetworkAddressCandidate(IPAddress address, int score)
+            {
+                Address = address;
+                Score = score;
+            }
+
+            public IPAddress Address { get; }
+
+            public int Score { get; }
         }
 
         private static string BuildHtmlPage()
