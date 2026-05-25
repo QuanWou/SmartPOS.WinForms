@@ -107,10 +107,10 @@ namespace SmartPOS.WinForms.BLL.Services
                     return null;
                 }
 
-                string intent = "OpenAI";
+                string intent = "Gemini";
                 if (localResponse != null && !string.IsNullOrWhiteSpace(localResponse.Intent))
                 {
-                    intent = localResponse.Intent + "+OpenAI";
+                    intent = localResponse.Intent + "+Gemini";
                 }
 
                 return BuildResponse(intent, answer);
@@ -119,7 +119,7 @@ namespace SmartPOS.WinForms.BLL.Services
             {
                 if (localResponse == null)
                 {
-                    return BuildResponse("OpenAIError", "AI nâng cao chưa khả dụng.\r\nChi tiết: " + ex.Message);
+                    return BuildResponse("GeminiError", "AI nâng cao chưa khả dụng.\r\nChi tiết: " + ex.Message);
                 }
 
                 localResponse.Answer += "\r\n\r\nAI nâng cao chưa khả dụng, đang dùng phân tích nội bộ.\r\nChi tiết: " + ex.Message;

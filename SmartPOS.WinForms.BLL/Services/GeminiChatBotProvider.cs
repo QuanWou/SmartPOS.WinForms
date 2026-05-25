@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -421,7 +422,6 @@ namespace SmartPOS.WinForms.BLL.Services
                 {
                     continue;
                 }
-                //test thu commit
                 foreach (object partItem in Enumerate(content["parts"]))
                 {
                     var part = partItem as Dictionary<string, object>;
@@ -481,7 +481,12 @@ namespace SmartPOS.WinForms.BLL.Services
         {
             string value = GetSetting(key, null);
             decimal parsed;
-            return decimal.TryParse(value, out parsed) && parsed >= 0 ? parsed : fallback;
+            NumberStyles style = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
+            return (decimal.TryParse(value, style, CultureInfo.InvariantCulture, out parsed) ||
+                    decimal.TryParse(value, style, CultureInfo.CurrentCulture, out parsed)) &&
+                   parsed >= 0
+                ? parsed
+                : fallback;
         }
 
         private static bool IsFalse(string value)
