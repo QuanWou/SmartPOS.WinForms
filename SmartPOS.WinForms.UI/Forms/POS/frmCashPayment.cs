@@ -11,9 +11,9 @@ namespace SmartPOS.WinForms.UI.Forms.POS
         // Update these constants when the restaurant changes its receiving account.
         private const string TransferBankCode = "TechCombank";
         private const string TransferBankName = "TECHCOMBANK";
-        private const string TransferAccountNumber = "19072952746016";
-        private const string TransferAccountNumberDisplay = "1907 2952 7460 16";
-        private const string TransferAccountName = "BUI MANH DUNG";
+        private const string TransferAccountNumber = "MS00T06578006967074";
+        private const string TransferAccountNumberDisplay = "MS00 T065 7800 6967 074";
+        private const string TransferAccountName = "SmartPOS";
         private const string TransferContent = "Thanh toan hoa don POS";
         private const string TransferTemplate = "compact2";
         private Label lblMenhGiaTitle;

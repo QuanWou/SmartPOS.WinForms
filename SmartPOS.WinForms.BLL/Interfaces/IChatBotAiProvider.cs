@@ -5,5 +5,7 @@ namespace SmartPOS.WinForms.BLL.Interfaces
         bool IsConfigured { get; }
 
         string Analyze(string question, string businessContext);
+
+        string Analyze(string question, string businessContext, bool deepAnalysis);
     }
 }

@@ -31,8 +31,12 @@ namespace SmartPOS.WinForms.BLL.Services
 
             try
             {
-                ChatBotResponse localResponse = BuildLocalResponse(normalized);
-                ChatBotResponse aiResponse = TryBuildAiResponse(question, localResponse);
+                bool deepAnalysis = IsDeepAnalysisRequest(normalized);
+                ChatBotResponse localResponse = deepAnalysis
+                    ? BuildResponse("DeepAnalysis", BuildDeepLocalAnalysisAnswer())
+                    : BuildLocalResponse(normalized);
+
+                ChatBotResponse aiResponse = TryBuildAiResponse(question, localResponse, deepAnalysis);
                 return aiResponse ?? localResponse;
             }
             catch (Exception ex)
@@ -91,7 +95,33 @@ namespace SmartPOS.WinForms.BLL.Services
             return BuildResponse("Fallback", BuildFallbackAnswer());
         }
 
-        private ChatBotResponse TryBuildAiResponse(string question, ChatBotResponse localResponse)
+        private bool IsDeepAnalysisRequest(string normalized)
+        {
+            if (ContainsAny(
+                normalized,
+                "phan tich sau",
+                "phan tich chuyen sau",
+                "chuyen sau",
+                "toan bo database",
+                "toan bo data base",
+                "toan bo du lieu",
+                "du lieu day du",
+                "dinh huong",
+                "chien luoc",
+                "xu huong khach hang",
+                "hanh vi khach hang",
+                "phan khuc khach hang"))
+            {
+                return true;
+            }
+
+            bool asksForTrend = ContainsAny(normalized, "xu huong", "du bao", "nguyen nhan", "chien luoc", "dinh huong");
+            bool asksForBusinessArea = ContainsAny(normalized, "khach hang", "doanh thu", "san pham", "ban hang", "cua hang", "ton kho");
+
+            return asksForTrend && asksForBusinessArea;
+        }
+
+        private ChatBotResponse TryBuildAiResponse(string question, ChatBotResponse localResponse, bool deepAnalysis)
         {
             if (_aiProvider == null || !_aiProvider.IsConfigured)
             {
@@ -100,17 +130,17 @@ namespace SmartPOS.WinForms.BLL.Services
 
             try
             {
-                string context = BuildBusinessContext();
-                string answer = _aiProvider.Analyze(question, context);
+                string context = deepAnalysis ? BuildDeepBusinessContext() : BuildBusinessContext();
+                string answer = _aiProvider.Analyze(question, context, deepAnalysis);
                 if (string.IsNullOrWhiteSpace(answer))
                 {
                     return null;
                 }
 
-                string intent = "Gemini";
+                string intent = deepAnalysis ? "GeminiDeepAnalysis" : "Gemini";
                 if (localResponse != null && !string.IsNullOrWhiteSpace(localResponse.Intent))
                 {
-                    intent = localResponse.Intent + "+Gemini";
+                    intent = localResponse.Intent + (deepAnalysis ? "+GeminiDeepAnalysis" : "+Gemini");
                 }
 
                 return BuildResponse(intent, answer);
@@ -218,6 +248,135 @@ namespace SmartPOS.WinForms.BLL.Services
             return builder.ToString();
         }
 
+        private string BuildDeepBusinessContext()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine("Chế độ phân tích sâu SmartPOS.");
+            builder.AppendLine("Thời điểm dữ liệu: " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
+            builder.AppendLine("Phạm vi: snapshot tổng hợp từ toàn bộ database hiện tại; dữ liệu cá nhân được gom nhóm để tránh gửi thông tin không cần thiết.");
+            builder.AppendLine("Lưu ý: các nhận định nguyên nhân/xu hướng phải bám vào số liệu bên dưới.");
+
+            AppendContextSection(builder, "Tổng quan bán hàng toàn hệ thống", delegate
+            {
+                AppendSalesOverview(builder, "Toàn thời gian", 0);
+                AppendSalesOverview(builder, "90 ngày gần nhất", 90);
+                AppendSalesOverview(builder, "30 ngày gần nhất", 30);
+                AppendSalesOverview(builder, "7 ngày gần nhất", 7);
+            });
+
+            AppendContextSection(builder, "Xu hướng doanh thu theo ngày 30 ngày", delegate
+            {
+                var items = _chatBotRepository.GetRevenueTrendByDay(30).ToList();
+                AppendTimeSeriesLines(builder, items, 30);
+            });
+
+            AppendContextSection(builder, "Xu hướng doanh thu theo tháng 12 tháng", delegate
+            {
+                var items = _chatBotRepository.GetRevenueTrendByMonth(12).ToList();
+                AppendTimeSeriesLines(builder, items, 12);
+            });
+
+            AppendContextSection(builder, "So sánh doanh thu danh mục 30 ngày", delegate
+            {
+                var categories = _chatBotRepository.GetRevenueComparisonByCategory(30)
+                    .OrderBy(x => x.ChangeAmount)
+                    .ToList();
+
+                if (!categories.Any())
+                {
+                    builder.AppendLine("- Không có dữ liệu.");
+                    return;
+                }
+
+                foreach (ChatBotCategoryComparisonResponse item in categories)
+                {
+                    builder.AppendLine("- " + item.TenLoai +
+                        ": kỳ này " + Money(item.CurrentRevenue) +
+                        ", kỳ trước " + Money(item.PreviousRevenue) +
+                        ", chênh " + Money(item.ChangeAmount) +
+                        " (" + item.ChangePercent.ToString("0.##") + "%)");
+                }
+            });
+
+            AppendContextSection(builder, "Phân khúc khách hàng theo hạng", delegate
+            {
+                var segments = _chatBotRepository.GetCustomerSegments().ToList();
+                if (!segments.Any())
+                {
+                    builder.AppendLine("- Không có dữ liệu khách hàng.");
+                    return;
+                }
+
+                foreach (ChatBotCustomerSegmentResponse item in segments)
+                {
+                    builder.AppendLine("- " + item.Segment +
+                        ": KH " + item.CustomerCount.ToString("N0") +
+                        ", đang hoạt động " + item.ActiveCustomerCount.ToString("N0") +
+                        ", hóa đơn " + item.InvoiceCount.ToString("N0") +
+                        ", doanh thu " + Money(item.Revenue) +
+                        ", AOV " + Money(item.AverageOrderValue) +
+                        ", mua TB " + item.AveragePurchaseCount.ToString("0.##") +
+                        ", điểm còn " + item.PointsAvailable.ToString("N0") +
+                        ", điểm đã đổi " + item.PointsRedeemed.ToString("N0") +
+                        ", mua gần nhất " + DateOrDash(item.LastPurchaseAt));
+                }
+            });
+
+            AppendContextSection(builder, "Xu hướng khách hàng theo lần mua gần nhất", delegate
+            {
+                AppendCustomerBehaviorLines(builder, _chatBotRepository.GetCustomerRecencySegments().ToList());
+            });
+
+            AppendContextSection(builder, "Xu hướng khách hàng theo giá trị chi tiêu", delegate
+            {
+                AppendCustomerBehaviorLines(builder, _chatBotRepository.GetCustomerValueSegments().ToList());
+            });
+
+            AppendContextSection(builder, "Hiệu suất sản phẩm 90 ngày", delegate
+            {
+                var products = _chatBotRepository.GetDeepProductPerformance(90, 15).ToList();
+                AppendDeepProductLines(builder, products);
+            });
+
+            AppendContextSection(builder, "Sản phẩm rủi ro biên lợi nhuận", delegate
+            {
+                var products = _chatBotRepository.GetProductMarginRisks(10).ToList();
+                AppendDeepProductLines(builder, products);
+            });
+
+            AppendContextSection(builder, "Hàng tồn cao bán chậm", delegate
+            {
+                var products = _chatBotRepository.GetHighStockSlowMovingProducts(50, 5, 30, 10).ToList();
+                AppendProductInsightLines(builder, products, true, true, false);
+            });
+
+            AppendContextSection(builder, "Gợi ý nhập hàng theo tồn kho và tốc độ bán", delegate
+            {
+                var products = _chatBotRepository.GetRestockSuggestions(10, 14, 10).ToList();
+                AppendProductInsightLines(builder, products, true, false, true);
+            });
+
+            AppendContextSection(builder, "Hóa đơn mới nhất", delegate
+            {
+                var invoices = _chatBotRepository.GetLatestInvoices(8).ToList();
+                if (!invoices.Any())
+                {
+                    builder.AppendLine("- Không có dữ liệu.");
+                    return;
+                }
+
+                foreach (ChatBotInvoiceSummaryResponse item in invoices)
+                {
+                    builder.AppendLine("- #" + item.MaHD +
+                        " | " + item.NgayLap.ToString("dd/MM/yyyy HH:mm") +
+                        " | " + Money(item.TongTien) +
+                        " | " + GetInvoiceStatusText(item.TrangThai));
+                }
+            });
+
+            return builder.ToString();
+        }
+
         private void AppendContextSection(StringBuilder builder, string title, Action append)
         {
             builder.AppendLine();
@@ -270,6 +429,103 @@ namespace SmartPOS.WinForms.BLL.Services
                 if (includeAverageDailySold)
                 {
                     line.Append(" | bán TB/ngày: " + item.AverageDailySold.ToString("0.##"));
+                }
+
+                builder.AppendLine(line.ToString());
+            }
+        }
+
+        private void AppendSalesOverview(StringBuilder builder, string label, int days)
+        {
+            ChatBotSalesOverviewResponse item = _chatBotRepository.GetSalesOverview(days);
+            builder.AppendLine("- " + label +
+                ": hóa đơn " + item.PaidInvoiceCount.ToString("N0") + "/" + item.InvoiceCount.ToString("N0") +
+                ", hủy " + item.CancelledInvoiceCount.ToString("N0") +
+                ", doanh thu " + Money(item.Revenue) +
+                ", tạm tính " + Money(item.Subtotal) +
+                ", giảm ưu đãi " + Money(item.OfferDiscount) +
+                ", giảm điểm " + Money(item.PointDiscount) +
+                ", AOV " + Money(item.AverageOrderValue) +
+                ", KH định danh " + item.UniqueCustomerCount.ToString("N0") +
+                ", đơn KH " + item.CustomerInvoiceCount.ToString("N0") +
+                ", đơn khách lẻ " + item.WalkInInvoiceCount.ToString("N0") +
+                ", từ " + DateOrDash(item.FirstInvoiceAt) +
+                " đến " + DateOrDash(item.LastInvoiceAt));
+        }
+
+        private void AppendTimeSeriesLines(StringBuilder builder, IList<ChatBotTimeSeriesResponse> items, int maxRows)
+        {
+            if (items == null || items.Count == 0)
+            {
+                builder.AppendLine("- Không có dữ liệu.");
+                return;
+            }
+
+            foreach (ChatBotTimeSeriesResponse item in items.Take(maxRows))
+            {
+                builder.AppendLine("- " + item.PeriodLabel +
+                    ": doanh thu " + Money(item.Revenue) +
+                    ", hóa đơn " + item.InvoiceCount.ToString("N0") +
+                    ", KH định danh " + item.UniqueCustomerCount.ToString("N0") +
+                    ", AOV " + Money(item.AverageOrderValue) +
+                    ", giảm ưu đãi/điểm " + Money(item.OfferDiscount + item.PointDiscount));
+            }
+        }
+
+        private void AppendCustomerBehaviorLines(StringBuilder builder, IList<ChatBotCustomerBehaviorResponse> items)
+        {
+            if (items == null || items.Count == 0)
+            {
+                builder.AppendLine("- Không có dữ liệu.");
+                return;
+            }
+
+            foreach (ChatBotCustomerBehaviorResponse item in items)
+            {
+                builder.AppendLine("- " + item.Segment +
+                    ": KH " + item.CustomerCount.ToString("N0") +
+                    " (" + item.SharePercent.ToString("0.##") + "%)" +
+                    ", hóa đơn " + item.InvoiceCount.ToString("N0") +
+                    ", doanh thu " + Money(item.Revenue) +
+                    ", AOV " + Money(item.AverageOrderValue));
+            }
+        }
+
+        private void AppendDeepProductLines(StringBuilder builder, IList<ChatBotProductInsightResponse> products)
+        {
+            if (products == null || products.Count == 0)
+            {
+                builder.AppendLine("- Không có dữ liệu.");
+                return;
+            }
+
+            foreach (ChatBotProductInsightResponse item in products)
+            {
+                StringBuilder line = new StringBuilder();
+                line.Append("- " + item.TenSP);
+
+                if (!string.IsNullOrWhiteSpace(item.MaVach))
+                {
+                    line.Append(" | mã: " + item.MaVach);
+                }
+
+                line.Append(" | tồn: " + item.SoLuongTon.ToString("N0"));
+
+                if (item.QuantitySold > 0)
+                {
+                    line.Append(" | bán: " + item.QuantitySold.ToString("N0"));
+                    line.Append(" | doanh thu: " + Money(item.Revenue));
+                    line.Append(" | lãi gộp ước tính: " + Money(item.GrossProfit));
+                    line.Append(" | biên: " + item.ProfitMarginPercent.ToString("0.##") + "%");
+                    line.Append(" | vốn tồn: " + Money(item.StockValue));
+                }
+                else
+                {
+                    line.Append(" | giá bán: " + Money(item.Revenue));
+                    line.Append(" | giá nhập: " + Money(item.CostOfGoodsSold));
+                    line.Append(" | lãi/unit: " + Money(item.GrossProfit));
+                    line.Append(" | biên: " + item.ProfitMarginPercent.ToString("0.##") + "%");
+                    line.Append(" | vốn tồn: " + Money(item.StockValue));
                 }
 
                 builder.AppendLine(line.ToString());
@@ -447,6 +703,70 @@ namespace SmartPOS.WinForms.BLL.Services
             return builder.ToString();
         }
 
+        private string BuildDeepLocalAnalysisAnswer()
+        {
+            ChatBotSalesOverviewResponse allTime = _chatBotRepository.GetSalesOverview(0);
+            ChatBotSalesOverviewResponse last30 = _chatBotRepository.GetSalesOverview(30);
+            ChatBotSalesOverviewResponse last7 = _chatBotRepository.GetSalesOverview(7);
+            var customerRecency = _chatBotRepository.GetCustomerRecencySegments().ToList();
+            var customerValues = _chatBotRepository.GetCustomerValueSegments().ToList();
+            var topProducts = _chatBotRepository.GetDeepProductPerformance(90, 5).ToList();
+            var slowMoving = _chatBotRepository.GetHighStockSlowMovingProducts(50, 5, 30, 5).ToList();
+
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine("Phân tích sâu nội bộ từ database SmartPOS:");
+            builder.AppendLine();
+            builder.AppendLine("Kết luận điều hành:");
+            builder.AppendLine("- Toàn thời gian có " + allTime.PaidInvoiceCount.ToString("N0") +
+                " hóa đơn đã thanh toán, doanh thu " + Money(allTime.Revenue) +
+                ", AOV " + Money(allTime.AverageOrderValue) + ".");
+            builder.AppendLine("- 30 ngày gần nhất đạt " + Money(last30.Revenue) +
+                " từ " + last30.PaidInvoiceCount.ToString("N0") +
+                " hóa đơn; 7 ngày gần nhất đạt " + Money(last7.Revenue) + ".");
+
+            builder.AppendLine();
+            builder.AppendLine("Xu hướng khách hàng:");
+            foreach (ChatBotCustomerBehaviorResponse item in customerRecency.Take(5))
+            {
+                builder.AppendLine("- " + item.Segment + ": " +
+                    item.CustomerCount.ToString("N0") + " KH, " +
+                    item.SharePercent.ToString("0.##") + "%, doanh thu " +
+                    Money(item.Revenue) + ".");
+            }
+
+            foreach (ChatBotCustomerBehaviorResponse item in customerValues.Take(4))
+            {
+                builder.AppendLine("- Nhóm " + item.Segment + ": " +
+                    item.CustomerCount.ToString("N0") + " KH, AOV " +
+                    Money(item.AverageOrderValue) + ".");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("Sản phẩm cần chú ý:");
+            foreach (ChatBotProductInsightResponse item in topProducts)
+            {
+                builder.AppendLine("- " + item.TenSP + ": bán " + item.QuantitySold.ToString("N0") +
+                    ", doanh thu " + Money(item.Revenue) +
+                    ", lãi gộp ước tính " + Money(item.GrossProfit) + ".");
+            }
+
+            foreach (ChatBotProductInsightResponse item in slowMoving)
+            {
+                builder.AppendLine("- Tồn cao bán chậm: " + item.TenSP +
+                    ", tồn " + item.SoLuongTon.ToString("N0") +
+                    ", bán 30 ngày " + item.QuantitySold.ToString("N0") + ".");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine("Định hướng hành động:");
+            builder.AppendLine("- Tập trung giữ nhóm khách mua trong 30 ngày bằng ưu đãi cá nhân và đổi điểm khi thanh toán.");
+            builder.AppendLine("- Kéo lại nhóm 31-180 ngày bằng phiếu ưu đãi có hạn dùng ngắn.");
+            builder.AppendLine("- Ưu tiên nhập hàng theo sản phẩm bán nhanh, tránh tăng vốn ở nhóm tồn cao bán chậm.");
+            builder.AppendLine("- Kiểm tra biên lợi nhuận sản phẩm trước khi tạo khuyến mãi mạnh.");
+
+            return builder.ToString();
+        }
+
         private string BuildGuideAnswer()
         {
             return "Hướng dẫn nhanh POS:\r\n" +
@@ -500,6 +820,13 @@ namespace SmartPOS.WinForms.BLL.Services
             {
                 defaults.Insert(1, "Có sản phẩm tồn kho cao cần khuyến mãi không?");
             }
+            else if (!string.IsNullOrWhiteSpace(intent) &&
+                     intent.IndexOf("DeepAnalysis", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                defaults.Insert(0, "Phân tích sâu toàn bộ cửa hàng");
+                defaults.Insert(1, "Xu hướng khách hàng 90 ngày?");
+                defaults.Insert(2, "Định hướng nhập hàng và ưu đãi?");
+            }
             else if (intent == "LowStock")
             {
                 defaults.Insert(1, "Sản phẩm nào nên nhập thêm?");
@@ -525,6 +852,16 @@ namespace SmartPOS.WinForms.BLL.Services
             }
 
             return string.IsNullOrWhiteSpace(status) ? "-" : status;
+        }
+
+        private static string Money(decimal amount)
+        {
+            return amount.ToString("N0") + " đ";
+        }
+
+        private static string DateOrDash(DateTime? value)
+        {
+            return value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
         }
 
         private bool ContainsAny(string normalizedSource, params string[] keywords)

@@ -129,7 +129,7 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
             flpQuickActions = new FlowLayoutPanel
             {
                 Dock = DockStyle.Bottom,
-                Height = 86,
+                Height = 126,
                 BackColor = Surface,
                 Padding = new Padding(14, 9, 14, 5),
                 WrapContents = true,
@@ -253,6 +253,7 @@ namespace SmartPOS.WinForms.UI.UserControls.ChatBot
         {
             flpQuickActions.Controls.Clear();
 
+            flpQuickActions.Controls.Add(BuildQuickActionButton("🧭 Phân tích sâu", "Phân tích sâu toàn bộ cửa hàng, xu hướng khách hàng và định hướng hành động"));
             flpQuickActions.Controls.Add(BuildQuickActionButton("📈 Doanh thu", "Phân tích doanh thu tuần này so với tuần trước"));
             flpQuickActions.Controls.Add(BuildQuickActionButton("🛒 Nhập hàng", "Sản phẩm nào nên nhập thêm?"));
             flpQuickActions.Controls.Add(BuildQuickActionButton("🏆 Bán chạy", "Top 5 sản phẩm bán chạy?"));

@@ -15,5 +15,13 @@ namespace SmartPOS.WinForms.DTO.Responses
         public decimal Revenue { get; set; }
 
         public decimal AverageDailySold { get; set; }
+
+        public decimal CostOfGoodsSold { get; set; }
+
+        public decimal GrossProfit { get; set; }
+
+        public decimal ProfitMarginPercent { get; set; }
+
+        public decimal StockValue { get; set; }
     }
 }

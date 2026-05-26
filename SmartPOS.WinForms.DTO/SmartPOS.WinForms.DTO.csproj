@@ -61,10 +61,14 @@
     <Compile Include="Requests\ProductSearchRequest.cs" />
     <Compile Include="Requests\StockInRequest.cs" />
     <Compile Include="Responses\ChatBotCategoryComparisonResponse.cs" />
+    <Compile Include="Responses\ChatBotCustomerBehaviorResponse.cs" />
+    <Compile Include="Responses\ChatBotCustomerSegmentResponse.cs" />
     <Compile Include="Responses\ChatBotInvoiceSummaryResponse.cs" />
     <Compile Include="Responses\ChatBotMetricResponse.cs" />
     <Compile Include="Responses\ChatBotProductInsightResponse.cs" />
     <Compile Include="Responses\ChatBotResponse.cs" />
+    <Compile Include="Responses\ChatBotSalesOverviewResponse.cs" />
+    <Compile Include="Responses\ChatBotTimeSeriesResponse.cs" />
     <Compile Include="Responses\CheckoutPreviewResponse.cs" />
     <Compile Include="Responses\DashboardSummaryResponse.cs" />
     <Compile Include="Responses\CustomerCategoryTrendResponse.cs" />

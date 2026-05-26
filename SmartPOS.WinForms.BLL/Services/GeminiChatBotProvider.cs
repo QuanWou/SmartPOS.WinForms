@@ -57,6 +57,11 @@ namespace SmartPOS.WinForms.BLL.Services
 
         public string Analyze(string question, string businessContext)
         {
+            return Analyze(question, businessContext, false);
+        }
+
+        public string Analyze(string question, string businessContext, bool deepAnalysis)
+        {
             if (!IsConfigured || string.IsNullOrWhiteSpace(question))
             {
                 return null;
@@ -71,15 +76,15 @@ namespace SmartPOS.WinForms.BLL.Services
 
             var requestBody = new Dictionary<string, object>
             {
-                { "systemInstruction", BuildContent(BuildInstructions()) },
-                { "contents", new object[] { BuildContent(BuildInput(question, businessContext), "user") } },
+                { "systemInstruction", BuildContent(BuildInstructions(deepAnalysis)) },
+                { "contents", new object[] { BuildContent(BuildInput(question, businessContext, deepAnalysis), "user") } },
                 { "generationConfig", new Dictionary<string, object>
                     {
-                        { "maxOutputTokens", _maxOutputTokens },
-                        { "temperature", _temperature },
+                        { "maxOutputTokens", deepAnalysis ? Math.Max(_maxOutputTokens, 2400) : _maxOutputTokens },
+                        { "temperature", deepAnalysis ? Math.Min(_temperature + 0.1m, 0.5m) : _temperature },
                         { "thinkingConfig", new Dictionary<string, object>
                             {
-                                { "thinkingBudget", _thinkingBudget }
+                                { "thinkingBudget", deepAnalysis ? Math.Max(_thinkingBudget, 256) : _thinkingBudget }
                             }
                         }
                     }
@@ -194,8 +199,19 @@ namespace SmartPOS.WinForms.BLL.Services
             return content;
         }
 
-        private static string BuildInstructions()
+        private static string BuildInstructions(bool deepAnalysis)
         {
+            if (deepAnalysis)
+            {
+                return "Bạn là trợ lý AI phân tích chuyên sâu được nhúng vào SmartPOS WinForms cho cửa hàng bán lẻ. " +
+                       "Chỉ dùng dữ liệu trong ngữ cảnh SmartPOS được cung cấp; nếu dữ liệu thiếu hoặc mẫu dữ liệu nhỏ thì nói rõ giới hạn. " +
+                       "Trả lời bằng tiếng Việt, thực tế, có định hướng hành động. Ưu tiên số liệu, xu hướng, nguyên nhân có thể kiểm chứng và rủi ro vận hành. " +
+                       "Không bịa dữ liệu, không tự nhận đã thay đổi hệ thống, không yêu cầu thông tin nhạy cảm. " +
+                       "Không dùng Markdown phức tạp; dùng plain text phù hợp WinForms Label. Có thể dùng tiêu đề ngắn và bullet dấu '-'. " +
+                       "Khi phân tích khách hàng, tập trung vào phân khúc, tần suất mua, giá trị đơn hàng, khả năng quay lại và cách dùng ưu đãi/điểm. " +
+                       "Khi đề xuất nhập hàng hoặc khuyến mãi, phải nêu lý do dựa trên tồn kho, tốc độ bán, biên lợi nhuận hoặc xu hướng doanh thu.";
+            }
+
             return "Bạn là trợ lý AI được nhúng vào SmartPOS WinForms để phân tích dữ liệu vận hành cửa hàng bán lẻ. " +
                    "Chỉ dùng dữ liệu trong phần ngữ cảnh được cung cấp; nếu dữ liệu thiếu thì nói rõ thiếu dữ liệu. " +
                    "Trả lời bằng tiếng Việt, rõ ràng, ngắn gọn, ưu tiên số liệu và hành động đề xuất. " +
@@ -205,9 +221,30 @@ namespace SmartPOS.WinForms.BLL.Services
                    "Không bịa dữ liệu, không tự nhận đã thay đổi hệ thống, và không yêu cầu người dùng cung cấp thông tin nhạy cảm.";
         }
 
-        private static string BuildInput(string question, string businessContext)
+        private static string BuildInput(string question, string businessContext, bool deepAnalysis)
         {
             StringBuilder builder = new StringBuilder();
+
+            if (deepAnalysis)
+            {
+                builder.AppendLine("Câu hỏi người dùng:");
+                builder.AppendLine(question.Trim());
+                builder.AppendLine();
+                builder.AppendLine("Snapshot dữ liệu SmartPOS để phân tích chuyên sâu:");
+                builder.AppendLine(string.IsNullOrWhiteSpace(businessContext) ? "Không có dữ liệu ngữ cảnh." : businessContext);
+                builder.AppendLine();
+                builder.AppendLine("Yêu cầu trả lời:");
+                builder.AppendLine("Định dạng plain text, không dùng bảng markdown.");
+                builder.AppendLine("1. Kết luận điều hành: 2-3 câu ngắn, nêu vấn đề chính và cơ hội chính.");
+                builder.AppendLine("2. Dấu hiệu từ dữ liệu: 4-7 bullet, mỗi bullet có số liệu cụ thể.");
+                builder.AppendLine("3. Nguyên nhân có khả năng: 3-5 bullet, nói rõ đây là suy luận nếu dữ liệu chưa đủ.");
+                builder.AppendLine("4. Xu hướng khách hàng: 3-5 bullet về phân khúc, tần suất quay lại, giá trị đơn và điểm/ưu đãi.");
+                builder.AppendLine("5. Định hướng hành động: 5-8 bullet ưu tiên theo tác động, nêu việc làm ngay trong POS/kho/khách hàng.");
+                builder.AppendLine("6. Rủi ro cần kiểm tra: tối đa 4 bullet.");
+                builder.AppendLine("Không viết chung chung. Không bịa dữ liệu ngoài snapshot. Nếu dữ liệu ít, đề xuất cách thu thập thêm.");
+                return builder.ToString();
+            }
+
             builder.AppendLine("Câu hỏi người dùng:");
             builder.AppendLine(question.Trim());
             builder.AppendLine();

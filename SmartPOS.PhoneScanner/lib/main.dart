@@ -87,6 +87,18 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
 
   double get _pointDiscount => math.min(_redeemPoints * 100, _totalAfterOffer).toDouble();
   double get _payableTotal => math.max(0.0, _totalAfterOffer - _pointDiscount);
+  String get _checkoutAdjustmentSummary {
+    final parts = <String>[];
+    if (_selectedOffer != null) {
+      parts.add('${_selectedOffer!.name} ${_selectedOffer!.percent.toStringAsFixed(0)}%');
+    }
+
+    if (_redeemPoints > 0) {
+      parts.add('Doi $_redeemPoints diem');
+    }
+
+    return parts.isEmpty ? 'Uu dai / diem' : parts.join(' - ');
+  }
 
   @override
   void dispose() {
@@ -1177,6 +1189,177 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
     );
   }
 
+  Future<void> _showCheckoutOptionsSheet() async {
+    if (_selectedCustomer == null) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void updateOptions(VoidCallback action) {
+              setState(action);
+              setSheetState(() {});
+            }
+
+            final maxRedeemPoints = _maxRedeemPoints;
+            final sliderValue =
+                math.min(_redeemPoints, maxRedeemPoints).toDouble();
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  16,
+                  20,
+                  MediaQuery.of(context).viewInsets.bottom + 20,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _selectedCustomer?.name ?? 'Khach hang',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${_selectedCustomer?.points ?? 0} diem kha dung',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<int>(
+                      key: ValueKey('offer-${_selectedOffer?.id ?? 0}'),
+                      initialValue: _selectedOffer?.id ?? 0,
+                      decoration: const InputDecoration(
+                        labelText: 'Uu dai',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem<int>(
+                          value: 0,
+                          child: Text('Khong dung uu dai'),
+                        ),
+                        ..._customerOffers.map(
+                          (offer) => DropdownMenuItem<int>(
+                            value: offer.id,
+                            child: Text(
+                              '${offer.name} - ${offer.percent.toStringAsFixed(0)}%',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: _customerOffers.isEmpty
+                          ? null
+                          : (value) {
+                              updateOptions(() {
+                                CustomerOffer? selectedOffer;
+                                for (final offer in _customerOffers) {
+                                  if (offer.id == value) {
+                                    selectedOffer = offer;
+                                    break;
+                                  }
+                                }
+
+                                _selectedOffer = selectedOffer;
+                                _clampCheckoutAdjustments();
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Doi diem',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        Text('$_redeemPoints/$maxRedeemPoints'),
+                      ],
+                    ),
+                    Slider(
+                      value: sliderValue,
+                      min: 0,
+                      max: (maxRedeemPoints <= 0 ? 1 : maxRedeemPoints)
+                          .toDouble(),
+                      divisions: maxRedeemPoints <= 0 ? 1 : maxRedeemPoints,
+                      label: '$_redeemPoints diem',
+                      onChanged: maxRedeemPoints <= 0
+                          ? null
+                          : (value) {
+                              updateOptions(() {
+                                _redeemPoints = value.round();
+                                _clampCheckoutAdjustments();
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 6),
+                    _InfoRow(label: 'Tam tinh', value: _formatMoney(_total)),
+                    _InfoRow(
+                      label: 'Giam uu dai',
+                      value: _formatMoney(_offerDiscount),
+                    ),
+                    _InfoRow(
+                      label: 'Giam diem',
+                      value: _formatMoney(_pointDiscount),
+                    ),
+                    _InfoRow(
+                      label: 'Can thanh toan',
+                      value: _formatMoney(_payableTotal),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            updateOptions(() {
+                              _selectedOffer = null;
+                              _redeemPoints = 0;
+                            });
+                          },
+                          child: const Text('Dat lai'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Xong'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildCartControls() {
     return Column(
       children: [
@@ -1212,70 +1395,24 @@ class _ScannerHomePageState extends State<ScannerHomePage> {
         ),
         if (_selectedCustomer != null) ...[
           const SizedBox(height: 8),
-          DropdownButtonFormField<int>(
-            initialValue: _selectedOffer?.id ?? 0,
-            decoration: const InputDecoration(
-              labelText: 'Uu dai',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            items: [
-              const DropdownMenuItem<int>(
-                value: 0,
-                child: Text('Khong dung uu dai'),
-              ),
-              ..._customerOffers.map(
-                (offer) => DropdownMenuItem<int>(
-                  value: offer.id,
+          OutlinedButton.icon(
+            onPressed: _showCheckoutOptionsSheet,
+            icon: const Icon(Icons.tune),
+            label: Row(
+              children: [
+                Expanded(
                   child: Text(
-                    '${offer.name} - ${offer.percent.toStringAsFixed(0)}%',
+                    _checkoutAdjustmentSummary,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-            ],
-            onChanged: _customerOffers.isEmpty
-                ? null
-                : (value) {
-                    setState(() {
-                      _selectedOffer = value == null || value == 0
-                          ? null
-                          : _customerOffers.firstWhere(
-                              (offer) => offer.id == value,
-                            );
-                      _clampCheckoutAdjustments();
-                    });
-                  },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: math.min(_redeemPoints, _maxRedeemPoints).toDouble(),
-                  min: 0,
-                  max: (_maxRedeemPoints <= 0 ? 1 : _maxRedeemPoints).toDouble(),
-                  divisions: _maxRedeemPoints <= 0 ? 1 : _maxRedeemPoints,
-                  label: '$_redeemPoints diem',
-                  onChanged: _maxRedeemPoints <= 0
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _redeemPoints = value.round();
-                            _clampCheckoutAdjustments();
-                          });
-                        },
+                Text(
+                  _formatMoney(_payableTotal),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-              ),
-              SizedBox(
-                width: 98,
-                child: Text(
-                  'Doi $_redeemPoints/$_maxRedeemPoints',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
         const SizedBox(height: 8),
@@ -1662,8 +1799,8 @@ class PaymentInfo {
 
   static String _formatBankAccountNumber(String value) {
     final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (digits == '19072952746016') {
-      return '1907 2952 7460 16';
+    if (digits == 'MS00T06578006967074') {
+      return 'MS00 T065 7800 6967 074';
     }
 
     return value;

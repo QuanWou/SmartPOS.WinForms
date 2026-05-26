@@ -24,7 +24,6 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
         private FlowLayoutPanel flpMessages;
         private TextBox txtQuestion;
         private Button btnSend;
-        private FlowLayoutPanel flpSuggestions;
         private FlowLayoutPanel flpQuickQuestions;
         private Label lblStatus;
         private readonly List<ChatMessageItem> _messages = new List<ChatMessageItem>();
@@ -203,11 +202,15 @@ namespace SmartPOS.WinForms.UI.Forms.ChatBot
                 Size = new Size(300, 266),
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
+                AutoScroll = true,
                 BackColor = Surface
             };
 
             string[] quickQuestions =
             {
+                "Phân tích sâu toàn bộ cửa hàng",
+                "Xu hướng khách hàng 90 ngày?",
+                "Định hướng nhập hàng và ưu đãi?",
                 "Doanh thu hôm nay?",
                 "Sản phẩm nào sắp hết hàng?",
                 "Top 5 sản phẩm bán chạy?",
